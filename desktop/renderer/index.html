@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TRON</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="chrome-header">
+        <div class="tab-strip" id="tab-strip"></div>
+        <button class="new-tab" id="new-tab" aria-label="New tab" title="New tab">+</button>
+        <div class="window-controls" aria-label="Window controls">
+          <button id="minimize-window" aria-label="Minimize">—</button>
+          <button id="maximize-window" aria-label="Maximize">□</button>
+          <button id="close-window" aria-label="Close">×</button>
+        </div>
+      </header>
+
+      <div class="toolbar">
+        <button class="toolbar-button" id="go-back" aria-label="Back" title="Back"></button>
+        <button class="toolbar-button muted" id="go-forward" aria-label="Forward" title="Forward"></button>
+        <button class="toolbar-button" id="reload-page" aria-label="Reload" title="Reload"></button>
+        <form class="address-form" id="address-form">
+          <span class="site-icon" aria-hidden="true"></span>
+          <input id="address-input" aria-label="Address and search bar" autocomplete="off" spellcheck="false" />
+          <button class="address-action" id="bookmark-page" type="button" aria-label="Bookmark page" title="Bookmark page"></button>
+        </form>
+        <button class="update-button" id="update-tron" type="button" aria-label="Get the latest TRON" title="Get the latest TRON">Update TRON</button>
+        <button class="toolbar-button" id="extensions" aria-label="Extensions" title="Extensions"></button>
+        <button class="toolbar-button profile" id="profile" aria-label="Profile" title="TRON profile"></button>
+        <button class="toolbar-button" id="browser-menu" aria-label="Menu" title="Menu"></button>
+      </div>
+
+      <main class="browser-content" id="browser-content" aria-label="Browser pages"></main>
+    </div>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

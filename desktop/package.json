@@ -1,0 +1,59 @@
+{
+  "name": "tron",
+  "version": "0.1.2",
+  "description": "The TRON desktop app and local search experience.",
+  "author": "TRONXVI",
+  "homepage": "https://tronxvi.com",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis",
+    "dist:dir": "electron-builder --win dir",
+    "release": "electron-builder --win nsis --publish always"
+  },
+  "build": {
+    "appId": "com.tronxvi.browser",
+    "productName": "TRON",
+    "artifactName": "TRON-${version}-Setup.${ext}",
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "renderer/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "joeypat19",
+      "repo": "TRON",
+      "releaseType": "release"
+    },
+    "win": {
+      "icon": "assets/tron-logo.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}
