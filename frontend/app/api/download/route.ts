@@ -6,7 +6,7 @@ import { Readable } from "node:stream";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const installerName = "TRON-0.1.2-Setup.exe";
+const installerName = "TRON-0.1.3-Setup.exe";
 
 export async function GET() {
   const installerPath = path.resolve(process.cwd(), "..", "desktop", "dist", installerName);

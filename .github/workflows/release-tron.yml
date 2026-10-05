@@ -31,8 +31,4 @@ jobs:
         working-directory: desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >-
-          npm run dist -- --publish always
-          -c.publish.provider=github
-          -c.publish.owner=${{ github.repository_owner }}
-          -c.publish.repo=${{ github.event.repository.name }}
+        run: npm run dist -- --publish always
