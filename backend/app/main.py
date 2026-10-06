@@ -6,6 +6,8 @@ import sqlite3
 import socket
 import threading
 import time
+from collections import OrderedDict
+from copy import deepcopy
 from contextlib import closing
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
@@ -22,17 +24,35 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from .crawler import (
+    CRAWLER_ENABLED,
+    CRAWL_PAGES_FTS_TABLE,
+    crawler_status,
+    enqueue_urls,
+    initialize_crawler_database,
+    runtime as crawler_runtime,
+)
+
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BACKEND_DIR / "data"
 DATABASE_PATH = DATA_DIR / "tron_search.sqlite3"
 FTS_TABLE = "search_results_fts"
+SEARCH_FTS_FIELDS = ("source_query", "title", "url", "description")
+CRAWL_FTS_FIELDS = ("title", "url", "description", "headings", "content")
 FAVICON_TABLE = "favicon_cache"
 FAVICON_MAX_BYTES = 256 * 1024
 FAVICON_CACHE_SECONDS = 30 * 24 * 60 * 60
 FAVICON_FAILURE_CACHE_SECONDS = 7 * 24 * 60 * 60
 FAVICON_REFRESHING: set[str] = set()
 FAVICON_REFRESHING_LOCK = threading.Lock()
+SEARCH_CANDIDATE_LIMIT = 500
+SEARCH_CACHE_TTL_SECONDS = 30
+SEARCH_CACHE_MAX_ENTRIES = 128
+SEARCH_CACHE: OrderedDict[tuple[str, int, int], tuple[float, "SearchResponse"]] = OrderedDict()
+SEARCH_CACHE_LOCK = threading.Lock()
+SEARCH_CONNECTION_LOCAL = threading.local()
+INDEX_REBUILD_NEEDED = False
 FAVICON_MIME_TYPES = {
     "image/gif",
     "image/jpeg",
@@ -99,6 +119,15 @@ class SearchResponse(BaseModel):
     results: list[SearchResult]
     tool: TimeToolResponse | None = None
     corrected_query: str | None = None
+
+
+class CrawlerSeedsRequest(BaseModel):
+    urls: list[str]
+    depth: int = 0
+
+
+class CrawlerStartRequest(BaseModel):
+    discover_links: bool = True
 
 
 class StoredResultItem:
@@ -181,6 +210,28 @@ def database_connection() -> sqlite3.Connection:
     connection.execute("PRAGMA busy_timeout=30000")
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA synchronous=FULL")
+    return connection
+
+
+def search_database_connection() -> sqlite3.Connection:
+    """Return one read-optimized SQLite connection per FastAPI worker thread."""
+    connection = getattr(SEARCH_CONNECTION_LOCAL, "connection", None)
+    if connection is not None:
+        try:
+            connection.execute("SELECT 1")
+            return connection
+        except sqlite3.Error:
+            SEARCH_CONNECTION_LOCAL.connection = None
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(DATABASE_PATH, timeout=5)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA query_only=ON")
+    connection.execute("PRAGMA busy_timeout=5000")
+    connection.execute("PRAGMA cache_size=-65536")
+    connection.execute("PRAGMA temp_store=MEMORY")
+    connection.execute("PRAGMA mmap_size=268435456")
+    SEARCH_CONNECTION_LOCAL.connection = connection
     return connection
 
 
@@ -302,6 +353,7 @@ def initialize_database() -> None:
             )
             """
         )
+        initialize_crawler_database(connection)
         result_count = connection.execute(
             "SELECT COUNT(*) FROM search_results"
         ).fetchone()[0]
@@ -309,6 +361,15 @@ def initialize_database() -> None:
             f"SELECT COUNT(*) FROM {FTS_TABLE}"
         ).fetchone()[0]
         if fts_count != result_count:
+            global INDEX_REBUILD_NEEDED
+            INDEX_REBUILD_NEEDED = True
+
+
+def rebuild_search_index() -> None:
+    """Rebuild a stale search index after startup, never during startup."""
+    global INDEX_REBUILD_NEEDED
+    try:
+        with closing(database_connection()) as connection, connection:
             connection.execute(f"DELETE FROM {FTS_TABLE}")
             connection.execute(
                 f"""
@@ -331,11 +392,17 @@ def initialize_database() -> None:
                 LEFT JOIN search_runs ON search_runs.id = search_results.run_id
                 """
             )
+        INDEX_REBUILD_NEEDED = False
+    except sqlite3.Error:
+        # Keep the flag set so the next service start retries the rebuild.
+        return
 
 
 @app.on_event("startup")
 def startup() -> None:
     initialize_database()
+    if INDEX_REBUILD_NEEDED:
+        threading.Thread(target=rebuild_search_index, name="tron-search-index-rebuild", daemon=True).start()
 
 
 @app.get("/api/health", response_model=HealthResponse)
@@ -595,11 +662,47 @@ def time_tool_for_query(query: str) -> TimeToolResponse | None:
     return None
 
 
-def fts_match_query(query: str) -> str:
+def fts_match_query(query: str, fields: tuple[str, ...] | None = None) -> str:
     tokens = search_tokens(query)
     # Require every meaningful query token. OR matching makes common words
     # such as "how" or "news" fan out across thousands of unrelated rows.
-    return " AND ".join(f'"{token.replace(chr(34), chr(34) * 2)}"*' for token in tokens)
+    if not fields:
+        return " AND ".join(f'"{token.replace(chr(34), chr(34) * 2)}"*' for token in tokens)
+    return " AND ".join(
+        "("
+        + " OR ".join(
+            f'{field}:"{token.replace(chr(34), chr(34) * 2)}"*'
+            for field in fields
+        )
+        + ")"
+        for token in tokens
+    )
+
+
+def search_cache_key(query: str, page: int, limit: int) -> tuple[str, int, int]:
+    return (" ".join(query.casefold().split()), page, limit)
+
+
+def cached_search(key: tuple[str, int, int]) -> SearchResponse | None:
+    now = time.monotonic()
+    with SEARCH_CACHE_LOCK:
+        entry = SEARCH_CACHE.get(key)
+        if entry is None:
+            return None
+        created_at, response = entry
+        if now - created_at > SEARCH_CACHE_TTL_SECONDS:
+            SEARCH_CACHE.pop(key, None)
+            return None
+        SEARCH_CACHE.move_to_end(key)
+        return deepcopy(response)
+
+
+def cache_search(key: tuple[str, int, int], response: SearchResponse) -> None:
+    with SEARCH_CACHE_LOCK:
+        SEARCH_CACHE[key] = (time.monotonic(), deepcopy(response))
+        SEARCH_CACHE.move_to_end(key)
+        while len(SEARCH_CACHE) > SEARCH_CACHE_MAX_ENTRIES:
+            SEARCH_CACHE.popitem(last=False)
 
 
 def suggested_query(query: str) -> str | None:
@@ -610,13 +713,13 @@ def suggested_query(query: str) -> str | None:
 
     normalized_query = " ".join(query_tokens)
     try:
-        with closing(database_connection()) as connection:
-            candidates = [
-                row[0]
-                for row in connection.execute(
-                    "SELECT DISTINCT query FROM search_runs WHERE query IS NOT NULL"
-                ).fetchall()
-            ]
+        connection = search_database_connection()
+        candidates = [
+            row[0]
+            for row in connection.execute(
+                "SELECT DISTINCT query FROM search_runs WHERE query IS NOT NULL"
+            ).fetchall()
+        ]
     except sqlite3.Error as exc:
         raise HTTPException(status_code=500, detail="Local search database failed") from exc
 
@@ -940,8 +1043,9 @@ def clean_display_text(value: str | None) -> str | None:
 
 def local_search(query: str, page: int, limit: int, allow_correction: bool = True) -> SearchResponse:
     tool_answer = time_tool_for_query(query)
-    match_query = fts_match_query(query)
-    if not match_query:
+    search_match_query = fts_match_query(query, SEARCH_FTS_FIELDS)
+    crawl_match_query = fts_match_query(query, CRAWL_FTS_FIELDS)
+    if not search_match_query:
         return SearchResponse(
             query=query,
             page=page,
@@ -954,8 +1058,18 @@ def local_search(query: str, page: int, limit: int, allow_correction: bool = Tru
         )
 
     tokens = search_tokens(query)
+    candidate_limit = min(2000, max(SEARCH_CANDIDATE_LIMIT, page * limit + limit))
     try:
-        with closing(database_connection()) as connection:
+        connection = search_database_connection()
+        search_result_count = connection.execute(
+            f"SELECT COUNT(*) FROM {FTS_TABLE} WHERE {FTS_TABLE} MATCH ?",
+            (search_match_query,),
+        ).fetchone()[0]
+        crawl_result_count = connection.execute(
+            f"SELECT COUNT(*) FROM {CRAWL_PAGES_FTS_TABLE} WHERE {CRAWL_PAGES_FTS_TABLE} MATCH ?",
+            (crawl_match_query,),
+        ).fetchone()[0]
+        with connection:
             rows = connection.execute(
                 f"""
                 SELECT
@@ -972,9 +1086,32 @@ def local_search(query: str, page: int, limit: int, allow_correction: bool = Tru
                     ON search_results.id = CAST({FTS_TABLE}.result_id AS INTEGER)
                 JOIN search_runs ON search_runs.id = search_results.run_id
                 WHERE {FTS_TABLE} MATCH ?
+                ORDER BY bm25({FTS_TABLE}, 10.0, 5.0, 3.0, 1.0, 0.25) ASC
+                LIMIT ?
                 """,
-                (match_query,),
+                (search_match_query, candidate_limit),
             ).fetchall()
+            crawl_rows = connection.execute(
+                f"""
+                SELECT
+                    crawl_pages.id,
+                    crawl_pages.title,
+                    crawl_pages.url,
+                    crawl_pages.description,
+                    NULL AS age,
+                    'TRON crawler' AS source_query,
+                    crawl_pages.fetched_at AS requested_at,
+                    bm25({CRAWL_PAGES_FTS_TABLE}, 10.0, 5.0, 3.0, 2.0, 0.25) AS fts_rank
+                FROM {CRAWL_PAGES_FTS_TABLE}
+                JOIN crawl_pages
+                    ON crawl_pages.id = CAST({CRAWL_PAGES_FTS_TABLE}.page_id AS INTEGER)
+                WHERE {CRAWL_PAGES_FTS_TABLE} MATCH ?
+                ORDER BY bm25({CRAWL_PAGES_FTS_TABLE}, 10.0, 5.0, 3.0, 2.0, 0.25) ASC
+                LIMIT ?
+                """,
+                (crawl_match_query, candidate_limit),
+            ).fetchall()
+            rows = [*rows, *crawl_rows]
     except sqlite3.Error as exc:
         raise HTTPException(status_code=500, detail="Local search database failed") from exc
 
@@ -1023,9 +1160,9 @@ def local_search(query: str, page: int, limit: int, allow_correction: bool = Tru
         query=query,
         page=page,
         limit=limit,
-        result_count=len(ranked),
+        result_count=search_result_count + crawl_result_count,
         has_previous=page > 1,
-        has_next=start + limit < len(ranked),
+        has_next=start + limit < search_result_count + crawl_result_count,
         results=results,
         tool=tool_answer,
     )
@@ -1037,7 +1174,63 @@ def search(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=20),
 ) -> SearchResponse:
-    return local_search(q, page, limit)
+    tool_query = time_tool_for_query(q) is not None
+    key = search_cache_key(q, page, limit)
+    if not tool_query:
+        cached = cached_search(key)
+        if cached is not None:
+            return cached
+
+    response = local_search(q, page, limit)
+    if not tool_query:
+        cache_search(key, response)
+    return response
+
+
+@app.get("/api/crawler/status")
+def crawler_status_route() -> dict[str, object]:
+    with closing(database_connection()) as connection:
+        return crawler_status(connection)
+
+
+@app.post("/api/crawler/seeds")
+def crawler_seeds(payload: CrawlerSeedsRequest) -> dict[str, object]:
+    if not payload.urls:
+        raise HTTPException(status_code=400, detail="Provide at least one HTTP or HTTPS seed URL")
+    if len(payload.urls) > 100:
+        raise HTTPException(status_code=400, detail="A maximum of 100 seed URLs may be added per request")
+    if payload.depth < 0 or payload.depth > 10:
+        raise HTTPException(status_code=400, detail="Depth must be between 0 and 10")
+    with closing(database_connection()) as connection:
+        result = enqueue_urls(connection, payload.urls, payload.depth)
+        return {**result, "enabled": CRAWLER_ENABLED or crawler_runtime.enabled, "running": crawler_runtime.running}
+
+
+@app.post("/api/crawler/start")
+def start_crawler(payload: CrawlerStartRequest | None = None) -> dict[str, object]:
+    if not CRAWLER_ENABLED:
+        raise HTTPException(status_code=503, detail="Crawler is disabled. Set TRON_CRAWLER_ENABLED=true to start it.")
+    with closing(database_connection()) as connection:
+        queued = connection.execute(
+            "SELECT COUNT(*) FROM crawl_queue WHERE state='queued'"
+        ).fetchone()[0]
+    if not queued:
+        raise HTTPException(status_code=400, detail="Crawler queue is empty. Add seed URLs first.")
+    discover_links = True if payload is None else payload.discover_links
+    crawler_runtime.start(str(DATABASE_PATH), discover_links=discover_links)
+    return {
+        "enabled": CRAWLER_ENABLED,
+        "running": True,
+        "queued": queued,
+        "run_id": crawler_runtime.run_id,
+        "discover_links": discover_links,
+    }
+
+
+@app.post("/api/crawler/stop")
+def stop_crawler() -> dict[str, object]:
+    crawler_runtime.stop()
+    return {"enabled": False, "running": False}
 
 
 @app.get("/api/tools/time", response_model=TimeToolResponse)
