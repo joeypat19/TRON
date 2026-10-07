@@ -20,7 +20,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -185,20 +184,10 @@ class FaviconLinkParser(HTMLParser):
 app = FastAPI(
     title="TRON API",
     version="0.2.0",
-    description="TRON API with on-demand Brave search persistence.",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:2343",
-        "http://127.0.0.1:2343",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    description="Internal API used by the downloadable TRON desktop app.",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 

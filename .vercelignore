@@ -1,0 +1,9 @@
+# TRON Mail is the only application in this Vercel project.
+# Keep unrelated workspace apps and their local dependencies out of uploads.
+.git/
+.vercel/
+backend/
+desktop/
+frontend/
+inbox/node_modules/
+inbox/.next/

@@ -1,16 +1,44 @@
 const { app, BrowserWindow, ipcMain, shell, session } = require("electron");
 const { autoUpdater } = require("electron-updater");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const isDevelopment = !app.isPackaged;
-const developmentUrl = process.env.TRON_START_URL || "http://127.0.0.1:2343";
+const backendUrl = process.env.TRON_BACKEND_URL || "http://127.0.0.1:938";
 const updateUrl = process.env.TRON_UPDATE_URL || "https://github.com/joeypat19/TRON/releases/latest";
-// Keep the packaged preview pointed at the working local TRON UI until the
-// public search.tronxvi.com deployment is live. Set TRON_START_URL to override it.
-const productionUrl = process.env.TRON_START_URL || "http://127.0.0.1:2343";
 
 let mainWindow;
 let lastUpdateStatus = { state: "idle" };
+
+function readBuildInfo() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, "build-info.json"), "utf8"));
+  } catch (_) {
+    return {};
+  }
+}
+
+function getBuildInfo() {
+  const buildInfo = readBuildInfo();
+  return {
+    version: app.getVersion(),
+    channel: isDevelopment ? "development" : "stable",
+    commit: buildInfo.commit || "local",
+    builtAt: buildInfo.builtAt || null,
+    releaseTag: buildInfo.releaseTag || `v${app.getVersion()}`,
+    dirty: buildInfo.dirty === true,
+  };
+}
+
+async function purgeLocalBrowserStorage() {
+  const sessions = [session.defaultSession, session.fromPartition("persist:tron")];
+  await Promise.all(sessions.map(async (browserSession) => {
+    await browserSession.clearStorageData({
+      storages: ["localstorage", "indexdb", "websql", "filesystem", "serviceworkers", "cachestorage"],
+    });
+    await browserSession.clearCache();
+  }));
+}
 
 function sendUpdateStatus(status) {
   lastUpdateStatus = status;
@@ -37,10 +65,6 @@ function configureAutoUpdates() {
   }, 3000);
 }
 
-function startUrl() {
-  return isDevelopment ? developmentUrl : productionUrl;
-}
-
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -48,7 +72,8 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     frame: false,
-    backgroundColor: "#202124",
+    icon: path.join(__dirname, "assets", "tron-logo.ico"),
+    backgroundColor: "#0a0b12",
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -61,7 +86,10 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
   mainWindow.webContents.on("did-finish-load", () => sendUpdateStatus(lastUpdateStatus));
-  mainWindow.once("ready-to-show", () => mainWindow.show());
+  mainWindow.once("ready-to-show", () => {
+    mainWindow.maximize();
+    mainWindow.show();
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -76,12 +104,24 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await purgeLocalBrowserStorage();
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(permission === "media" || permission === "notifications");
   });
 
-  ipcMain.handle("tron:get-start-url", () => startUrl());
+  ipcMain.handle("tron:search", async (_event, { query, page = 1, limit = 10 }) => {
+    const url = new URL("/api/search", backendUrl);
+    url.searchParams.set("q", String(query || ""));
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("limit", String(limit));
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`TRON search failed with status ${response.status}`);
+    }
+    return response.json();
+  });
+  ipcMain.handle("tron:get-build-info", () => getBuildInfo());
   ipcMain.handle("tron:open-update", () => shell.openExternal(updateUrl));
   ipcMain.handle("tron:check-for-updates", async () => {
     if (isDevelopment) return { state: "development" };

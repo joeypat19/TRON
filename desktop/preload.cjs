@@ -1,7 +1,8 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("tronDesktop", {
-  getStartUrl: () => ipcRenderer.invoke("tron:get-start-url"),
+  search: (query, page = 1, limit = 10) => ipcRenderer.invoke("tron:search", { query, page, limit }),
+  getBuildInfo: () => ipcRenderer.invoke("tron:get-build-info"),
   openUpdate: () => ipcRenderer.invoke("tron:open-update"),
   checkForUpdates: () => ipcRenderer.invoke("tron:check-for-updates"),
   installUpdate: () => ipcRenderer.invoke("tron:install-update"),

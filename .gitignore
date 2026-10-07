@@ -9,6 +9,10 @@ node_modules/
 .next/
 out/
 desktop/dist/
+desktop/build-info.json
 *.log
 *.tsbuildinfo
 
+
+.vercel
+.env*

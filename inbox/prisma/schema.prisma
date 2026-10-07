@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MailboxProvider {
+  TRON
+  GMAIL
+  MICROSOFT
+  IMAP_SMTP
+}
+
+enum MailboxAccountStatus {
+  CONNECTED
+  SYNCING
+  NEEDS_REAUTH
+  ERROR
+  DISABLED
+}
+
+model UserMailboxAccount {
+  id                   String               @id @default(cuid())
+  ownerId              String @map("clerkUserId")
+  provider             MailboxProvider
+  emailAddress         String
+  displayName          String?
+  providerAccountId    String?
+  accessTokenEncrypted String?
+  refreshTokenEncrypted String?
+  tokenExpiresAt       DateTime?
+  scopesJson           String?
+  imapHost             String?
+  imapPort             Int?
+  imapSecurity         String?
+  smtpHost             String?
+  smtpPort             Int?
+  smtpSecurity         String?
+  usernameEncrypted    String?
+  passwordEncrypted    String?
+  status               MailboxAccountStatus @default(CONNECTED)
+  lastSyncAt           DateTime?
+  syncCursor           String?
+  syncError            String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  messages             MailboxMessage[]
+
+  @@unique([ownerId, provider, emailAddress])
+  @@index([ownerId, provider, status])
+}
+
+model MailboxMessage {
+  id                     String          @id @default(cuid())
+  ownerId                String @map("clerkUserId")
+  mailboxAccountId       String
+  provider               MailboxProvider
+  sourceEmail            String
+  providerMessageId      String
+  providerThreadId       String?
+  providerConversationId String?
+  subject                String
+  fromName               String?
+  fromEmail              String
+  toJson                 String
+  ccJson                 String?
+  date                   DateTime
+  snippet                String?
+  plainTextBody          String?
+  sanitizedHtmlBody      String?
+  isRead                 Boolean         @default(false)
+  isStarred              Boolean         @default(false)
+  isArchived             Boolean         @default(false)
+  isTrashed              Boolean         @default(false)
+  hasAttachments         Boolean         @default(false)
+  sortCategory           String?
+  sortScore              Float?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  mailboxAccount         UserMailboxAccount @relation(fields: [mailboxAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([mailboxAccountId, providerMessageId])
+  @@index([ownerId, date])
+  @@index([ownerId, provider, sourceEmail])
+}

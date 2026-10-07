@@ -1,0 +1,40 @@
+name: Validate TRON desktop
+
+on:
+  pull_request:
+    paths:
+      - "desktop/**"
+      - ".github/workflows/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "desktop/**"
+      - ".github/workflows/**"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out TRON
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Check desktop source
+        working-directory: desktop
+        run: npm run verify
+
+      - name: Build and validate installer artifacts
+        working-directory: desktop
+        run: npm run dist -- --x64 && npm run release:artifacts

@@ -1,12 +1,15 @@
-# TRON — FastAPI + Next.js starter
+# TRON — downloadable desktop app
 
-TRON is a small full-stack starter with a FastAPI backend and a Next.js App Router frontend.
+TRON is a downloadable Windows desktop app. Its FastAPI service is an internal
+API for the Electron app and does not serve a TRON website, HTML pages, API
+documentation, or OpenAPI routes.
 
 ## Structure
 
 ```text
-backend/    FastAPI service
-frontend/   Next.js + TypeScript UI
+backend/    Internal API used by the desktop app
+desktop/    Downloadable Electron app and TRON UI
+inbox/      Separate web application; this is the only website in the repo
 ```
 
 ## Run locally
@@ -21,35 +24,36 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 938
 ```
 
-The API is available at `http://localhost:938` and its OpenAPI docs are at `http://localhost:938/docs`.
+The internal API is available at `http://localhost:938` for the desktop app.
+TRON does not expose a website or API documentation route.
 
 `GET /api/search?q=github&page=1&limit=10` searches the locally stored SQLite corpus. It does not call Brave or add new indexed data.
 
-### Frontend
+### Optional crawler
 
-```powershell
-cd frontend
-npm install
-npm run dev -- --port 2343
-```
-
-Open `http://localhost:2343`.
-
-The frontend defaults to `http://localhost:8000`. To point it elsewhere, create `frontend/.env.local`:
+The crawler is disabled unless `TRON_CRAWLER_ENABLED=true` is configured. Ten workers share one SQLite frontier and storage index; atomic claims, worker leases, canonical URL uniqueness, and restart recovery prevent duplicate work. Per-domain politeness limits keep concurrency bounded even when more workers are available. The main tuning variables are:
 
 ```env
-BACKEND_URL=http://localhost:938
+TRON_CRAWLER_ENABLED=true
+TRON_CRAWLER_WORKERS=10
+TRON_CRAWLER_PER_DOMAIN_CONCURRENCY=2
+TRON_CRAWLER_DELAY_SECONDS=1.0
+TRON_CRAWLER_LEASE_SECONDS=300
+TRON_CRAWLER_MAX_DEPTH=3
+TRON_CRAWLER_MAX_LINKS_PER_PAGE=2000
+TRON_CRAWLER_MAX_QUEUE_SIZE=250000
 ```
+
+Start and stop it with `POST /api/crawler/start` and `POST /api/crawler/stop`. Sitemap results and public-host DNS checks are cached, redirects are validated, and interrupted queue items are recovered on the next run.
 
 ### TRON desktop app
 
-The Electron desktop shell gives TRON its own window, tabs, URL bar, navigation controls, and in-app website loading.
+The Electron desktop app owns the TRON home page, search results, tabs, URL bar, navigation controls, and in-app website loading. Search requests go directly to the local backend.
 
-Start it against the local frontend:
+Start it against the local backend:
 
 ```powershell
 cd desktop
-$env:TRON_START_URL="http://127.0.0.1:2343"
 npm start
 ```
 
@@ -61,5 +65,29 @@ $env:NODE_OPTIONS="--use-system-ca"
 npm run dist -- --x64
 ```
 
-The installer is written to `desktop/dist/`. The current preview build defaults to the local frontend at `http://127.0.0.1:2343`; set `TRON_START_URL=https://search.tronxvi.com` after the public deployment is live.
+The installer is written to `desktop/dist/`.
+
+### Release workflow
+
+The desktop app reads the current workspace in development and checks the
+GitHub release feed only when packaged. Every published release must use a tag
+that matches `desktop/package.json`:
+
+```powershell
+cd desktop
+npm ci
+npm run verify
+cd ..
+$version = (Get-Content desktop\package.json | ConvertFrom-Json).version
+git tag "v$version"
+git push origin main --tags
+```
+
+The `release-tron.yml` workflow validates the version, writes build identity
+metadata, creates the Windows NSIS installer, and publishes the installer,
+`latest.yml`, and blockmap. Installed TRON clients then discover the release
+through `electron-updater`.
+
+The home screen shows the running version and commit so local, packaged, and
+published builds can be distinguished immediately.
 
