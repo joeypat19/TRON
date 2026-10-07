@@ -38,3 +38,43 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run release
+
+      - name: Consolidate release assets
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        with:
+          script: |
+            const tag = process.env.RELEASE_TAG;
+            const { owner, repo } = context.repo;
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+            const matches = releases.filter((release) => release.tag_name === tag && !release.draft);
+            if (!matches.length) throw new Error(`No published release found for ${tag}`);
+
+            const primary = matches.slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
+            for (const duplicate of matches.filter((release) => release.id !== primary.id)) {
+              for (const asset of duplicate.assets) {
+                const existing = primary.assets.find((candidate) => candidate.name === asset.name);
+                if (existing) {
+                  await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: existing.id });
+                }
+                const downloaded = await github.request(asset.url, {
+                  headers: { accept: "application/octet-stream" },
+                });
+                await github.rest.repos.uploadReleaseAsset({
+                  owner,
+                  repo,
+                  release_id: primary.id,
+                  name: asset.name,
+                  data: Buffer.from(downloaded.data),
+                });
+              }
+              await github.rest.repos.deleteRelease({ owner, repo, release_id: duplicate.id });
+            }
+
+            const finalRelease = await github.rest.repos.getRelease({ owner, repo, release_id: primary.id });
+            const names = finalRelease.data.assets.map((asset) => asset.name);
+            for (const required of ["latest.yml", `TRON-${tag.slice(1)}-Setup.exe`, `TRON-${tag.slice(1)}-Setup.exe.blockmap`]) {
+              if (!names.includes(required)) throw new Error(`Release ${tag} is missing ${required}`);
+            }
+            core.info(`Release ${tag} assets: ${names.join(", ")}`);
