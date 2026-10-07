@@ -8,6 +8,15 @@ vi.mock("next/navigation", () => ({
   redirect: (destination: string) => redirect(destination),
 }));
 
+vi.mock("@/lib/auth/session", () => ({
+  getAuthenticatedUser: vi.fn(async () => ({
+    id: "user_123",
+    email: "user@example.com",
+    displayName: "User",
+    emailVerifiedAt: null,
+  })),
+}));
+
 describe("HomePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();

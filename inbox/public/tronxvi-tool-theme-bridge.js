@@ -252,6 +252,43 @@
       color: var(--text, #dfe6eb) !important;
     }
 
+    /* Copy is content, not a control surface. Some tools ship headings and
+       prose inside generic classes that the theme safety net also uses for
+       chrome. Keep those text nodes and copy wrappers transparent so they do
+       not render as rectangular plates behind otherwise open content. Cards,
+       controls, canvases, and authored media remain explicitly surfaced. */
+    body :where(
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6,
+      p,
+      li,
+      dt,
+      dd,
+      blockquote,
+      figcaption,
+      caption,
+      [data-tronxvi-text-content="true"],
+      [class*="copy"],
+      [class*="prose"],
+      [class*="description"],
+      [class*="summary"],
+      [class*="heading"],
+      [class*="title"],
+      [class*="paragraph"],
+      [class*="prompt"],
+      [class*="text-content"],
+      [class*="text-block"],
+      [class*="copy-block"]
+    ):not(button):not(input):not(textarea):not(select):not(option):not([class*="button"]):not([class*="control"]):not([class*="card"]):not([class*="panel"]):not([class*="surface"]):not([class*="canvas"]):not([class*="editor"]):not([class*="page"]):not([class*="slide"]):not([class*="active"]):not([class*="primary"]):not([class*="selected"]):not([aria-selected="true"]):not([aria-pressed="true"]):not([data-active="true"]):not([data-state="active"]) {
+      background: transparent !important;
+      background-image: none !important;
+      box-shadow: none !important;
+    }
+
     body :where(svg) {
       color: var(--text, #f2f5f7);
       stroke: currentColor;
@@ -366,6 +403,14 @@
       border-color: var(--accent, #f2f5f7) !important;
       color: var(--accent-contrast, var(--theme-button-text, var(--text, #010304))) !important;
       -webkit-text-fill-color: var(--accent-contrast, var(--theme-button-text, var(--text, #010304))) !important;
+    }
+
+    body:has(.creation-rebuild) .creation-rebuild__mode-option--active svg,
+    body:has(.creation-rebuild) .creation-rebuild__mode-option--active:hover svg,
+    body:has(.creation-rebuild) .creation-rebuild__mode-option--active:focus-visible svg {
+      color: var(--accent-contrast, var(--theme-button-text, var(--appearance-text, var(--text, #010304)))) !important;
+      fill: none !important;
+      stroke: currentColor !important;
     }
 
     /* Car Finder ships a large standalone stylesheet with its own historical
@@ -513,6 +558,66 @@
     body:has(.workspace-sidebar) .code-editor__highlight-layer .code-token--comment {
       color: var(--text-muted, var(--theme-lock-muted, #aab2ba)) !important;
     }
+
+    /* Keep tool chrome open and editorial: remove decorative surfaces without
+       touching authored canvases or active/primary controls. */
+    body :is(
+      [class*="hero"],
+      [class*="copy"],
+      [class*="content"],
+      [class*="section"],
+      [class*="card"],
+      [class*="panel"],
+      [class*="window"],
+      [class*="toolbar"],
+      [class*="group"],
+      [class*="actions"],
+      [class*="layout"],
+      [class*="workspace"],
+      [class*="stage"],
+      [class*="preview"],
+      [class*="list"],
+      [class*="table"],
+      [class*="form"],
+      [class*="menu"],
+      [class*="popover"],
+      [class*="dialog"],
+      [class*="drawer"],
+      [class*="settings"],
+      [class*="toggle"],
+      [class*="segmented"],
+      [class*="filter"],
+      [class*="search"],
+      [class*="stats"],
+      [class*="stat"],
+      [class*="orbit"],
+      [class*="decor"]
+    ):not(input):not(textarea):not(select):not(option):not(.page):not(.page-content):not(.slide-canvas):not(.editor-slide-canvas):not([class*="canvas"]):not([class*="active"]):not([class*="primary"]):not([class*="selected"]):not([aria-selected="true"]):not([aria-pressed="true"]):not([data-active="true"]):not([data-state="active"]) {
+      background: transparent !important;
+      background-image: none !important;
+      box-shadow: none !important;
+    }
+
+    body :is([class*="hero"], [class*="orbit"], [class*="decor"])::before,
+    body :is([class*="hero"], [class*="orbit"], [class*="decor"])::after {
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+
+    body :is(button, [role="button"]):not([aria-pressed="true"]):not([aria-selected="true"]):not([data-active="true"]):not([data-state="active"]):not([data-tronxvi-accent-button="true"]):not([class*="active"]):not([class*="primary"]):not([class*="danger"]):not([class*="delete"]):not([class*="send"]):not([class*="submit"]):not([class*="cta"]):not([class*="confirm"]):not([class*="save"]) {
+      background: transparent !important;
+      background-image: none !important;
+      box-shadow: none !important;
+    }
+
+    body :is(
+      [class*="primary"], [class*="danger"], [class*="delete"], [class*="send"],
+      [class*="submit"], [class*="cta"], [class*="confirm"], [class*="save"],
+      [aria-pressed="true"], [aria-selected="true"], [data-active="true"],
+      [data-state="active"], [data-tronxvi-accent-button="true"]
+    ) {
+      box-shadow: none !important;
+    }
   `;
 
   function ensureThemeSafetyNet() {
@@ -522,6 +627,9 @@
     style.textContent = themeSafetyNetCss;
     (document.head || document.documentElement).appendChild(style);
   }
+
+  // Directly opened tools use the same chrome contract as embedded tools.
+  ensureThemeSafetyNet();
 
   // These aliases keep older workspace selectors compatible while making the
   // repository theme tokens the only values that can change at runtime.

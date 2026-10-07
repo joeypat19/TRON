@@ -1,0 +1,34 @@
+[
+  {
+    "id": "focus-mode",
+    "name": "Focus Mode",
+    "version": "1.0.0",
+    "category": "Productivity",
+    "description": "Keep browsing calm by reducing visual noise while you work.",
+    "icon": "✦"
+  },
+  {
+    "id": "page-notes",
+    "name": "Page Notes",
+    "version": "1.0.0",
+    "category": "Tools",
+    "description": "Save quick notes alongside the pages you are researching.",
+    "icon": "N"
+  },
+  {
+    "id": "privacy-shield",
+    "name": "Privacy Shield",
+    "version": "1.0.0",
+    "category": "Privacy",
+    "description": "A clear place to review privacy controls for installed extensions.",
+    "icon": "◆"
+  },
+  {
+    "id": "tron-inbox-tools",
+    "name": "TRON Inbox Tools",
+    "version": "1.0.0",
+    "category": "TRON",
+    "description": "Bring your TRON Inbox workflows closer to the browser surface.",
+    "icon": "✉"
+  }
+]

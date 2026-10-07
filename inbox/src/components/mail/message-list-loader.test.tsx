@@ -81,6 +81,7 @@ describe("MessageListLoader", () => {
         route="/mail/search"
         searchMode
         searchQuery="joey"
+        title="Search"
       />,
     );
 

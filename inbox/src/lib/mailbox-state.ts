@@ -40,6 +40,22 @@ export function getMailboxLoadStateFromReason(reason: MailboxFailureReason): Exc
     return { status: "setup_error", reason, message: diagnostic.userMessage, developerMessage: diagnostic.devMessage };
   }
 
+  if (
+    [
+      "GOOGLE_EXTERNAL_ACCOUNT_MISSING",
+      "GOOGLE_OAUTH_TOKEN_MISSING",
+      "GMAIL_TOKEN_MISSING",
+      "GMAIL_SCOPE_MISSING",
+      "GMAIL_SCOPES_MISSING",
+      "GOOGLE_TOKEN_REFRESH_FAILED",
+      "MICROSOFT_TOKEN_MISSING",
+      "MICROSOFT_SCOPE_MISSING",
+      "MICROSOFT_ADMIN_CONSENT_REQUIRED",
+    ].includes(reason)
+  ) {
+    return { status: "needs_google_reconnect", reason, message: diagnostic.userMessage, developerMessage: diagnostic.devMessage };
+  }
+
   return { status: "temporary_error", reason, message: diagnostic.userMessage, developerMessage: diagnostic.devMessage };
 }
 

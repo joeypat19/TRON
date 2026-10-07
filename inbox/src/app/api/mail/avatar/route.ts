@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
+import { authApiErrorResponse } from "@/lib/auth/api";
+import { requireAuthenticatedUser } from "@/lib/auth/session";
 import { normalizeMailboxEmail } from "@/lib/mail/participants";
 import { resolveMailAvatars } from "@/lib/mail/avatars";
 
 export async function GET(request: Request) {
+  try {
+    await requireAuthenticatedUser();
+  } catch (error) {
+    return authApiErrorResponse(error) ?? NextResponse.json({ error: "Authentication is required." }, { status: 401 });
+  }
   const url = new URL(request.url);
   const email = normalizeMailboxEmail(url.searchParams.get("email"));
 

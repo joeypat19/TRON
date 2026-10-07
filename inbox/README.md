@@ -1,6 +1,8 @@
 # TRON Mail Inbox
 
-Inbox is the standalone TRON mailbox interface. It currently runs as a public local mailbox while the account system is being built.
+Inbox is the standalone TRON mailbox interface with database-backed TRON accounts.
+
+Users create an account with an email, password, and a personal 4-, 6-, 8-, or 10-digit login code. Login requires the email/password step followed by the personal code. Passwords, codes, and session tokens are hashed; the browser only receives an HTTP-only session cookie. Every TRON account receives a private `user-<id>@tronxvi.com` mailbox.
 
 Google and Microsoft mailbox connections are not part of the runtime. The old connector routes remain only as compatibility entry points for the unchanged interface; they provision/select the local TRON mailbox and never start external OAuth or call Gmail, Microsoft Graph, SMTP, or IMAP.
 
@@ -13,13 +15,17 @@ Google and Microsoft mailbox connections are not part of the runtime. The old co
 
 ## Local TRON address
 
-When Inbox first opens, it provisions a shared local address in the form:
+When a TRON account is created, it provisions a private local address in the form:
 
 ```text
 user-<account-id>@tronxvi.com
 ```
 
 This creates the local mailbox record and keeps the Inbox UI operational. Actual internet mail delivery still requires the future TRON mail transport service: inbound SMTP, outbound delivery, spam filtering, attachment storage, DNS authentication, and abuse controls.
+
+## Account recovery email
+
+Recovery routes are implemented with single-use, expiring database tokens. Configure `AUTH_EMAIL_API_KEY` and `AUTH_EMAIL_FROM` (and optionally `AUTH_EMAIL_API_URL`) in the deployment environment to send recovery links through the configured email API. Environment files are intentionally not changed by repository work.
 
 ## Production environment
 

@@ -75,9 +75,11 @@ describe("ComposeForm", () => {
     await user.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => expect(sendMessageAction).toHaveBeenCalled());
-    expect(capturedFormData?.get("to")).toBe("to@example.com");
-    expect(capturedFormData?.get("cc")).toBe("cc@example.com");
-    expect(capturedFormData?.get("bcc")).toBe("bcc@example.com");
+    expect(capturedFormData).toBeInstanceOf(FormData);
+    const submittedFormData = capturedFormData as unknown as FormData;
+    expect(submittedFormData.get("to")).toBe("to@example.com");
+    expect(submittedFormData.get("cc")).toBe("cc@example.com");
+    expect(submittedFormData.get("bcc")).toBe("bcc@example.com");
   });
 
   it("does not render visible Recipients copy in compose", () => {

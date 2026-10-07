@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { authApiErrorResponse } from "@/lib/auth/api";
+import { requireAuthenticatedUser } from "@/lib/auth/session";
 import { resolveMailAvatars } from "@/lib/mail/avatars";
 
 const bodySchema = z.object({
@@ -7,6 +9,11 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  try {
+    await requireAuthenticatedUser();
+  } catch (error) {
+    return authApiErrorResponse(error) ?? NextResponse.json({ error: "Authentication is required." }, { status: 401 });
+  }
   const rawBody = await request.text();
   const parsed = bodySchema.safeParse(rawBody ? JSON.parse(rawBody) : {});
 

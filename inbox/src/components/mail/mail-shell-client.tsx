@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Filter,
   Inbox,
+  LogOut,
   Mail,
   Menu,
   PenSquare,
@@ -266,6 +267,7 @@ function SearchToolbar() {
 
 export function MailShellClient({
   children,
+  account,
   activeMailbox,
   connectedAccounts,
   labels,
@@ -284,6 +286,11 @@ export function MailShellClient({
     || internalPathname.startsWith("/mail/view/")
     || internalPathname.startsWith("/mail/label/");
   const mainScrollClassName = showMailboxSearch ? "overflow-hidden" : "overflow-y-auto";
+
+  async function signOut() {
+    await fetch(appPath("/api/auth/logout"), { method: "POST" });
+    window.location.assign(appPath("/auth"));
+  }
 
   const customLabels = useMemo(
     () => labels.filter((label) => label.kind === "user").sort((left, right) => left.name.localeCompare(right.name)),
@@ -500,10 +507,23 @@ export function MailShellClient({
                       </div>
 
                       <div className="flex items-center justify-end gap-3" data-testid="mail-header-user-menu">
+                        <div className="hidden text-right sm:block">
+                          <p className="max-w-52 truncate text-sm font-medium text-[var(--text)]">{account.email}</p>
+                          <p className="text-xs text-[var(--text-muted)]">TRON account</p>
+                        </div>
                         <MailAccountSwitcher
                           accounts={connectedAccounts}
                           activeMailboxId={activeMailbox?.id ?? null}
                         />
+                        <button
+                          aria-label="Sign out"
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface-overlay)] text-[var(--text-muted)] transition hover:border-[var(--accent)] hover:text-[var(--text)]"
+                          onClick={signOut}
+                          title="Sign out"
+                          type="button"
+                        >
+                          <LogOut className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   </header>

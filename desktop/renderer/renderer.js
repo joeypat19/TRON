@@ -1,15 +1,24 @@
 const tabs = [];
 let activeTabId = null;
 let tabSequence = 0;
-let updateReady = false;
-let latestInstallInProgress = false;
 const FALLBACK = "data:image/svg+xml;charset=utf-8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='8.5' fill='none' stroke='#9aa0a6' stroke-width='1.6'/><path d='M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5S14.4 18.1 12 20.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5Z' fill='none' stroke='#9aa0a6' stroke-width='1.2'/></svg>");
+const INFINITY_URL = "https://infinity.tronxvi.com/?tool=general";
+const INBOX_URL = "https://troninbox.com/";
+const SHORTCUT_STORAGE_KEY = "tron.home.shortcuts";
+const STORE_INSTALL_STORAGE_KEY = "tron.store.installed";
+const STORE_CATALOG = [
+  { id:"focus-mode", name:"Focus Mode", version:"1.0.0", category:"Productivity", description:"Keep browsing calm by reducing visual noise while you work.", icon:"✦" },
+  { id:"page-notes", name:"Page Notes", version:"1.0.0", category:"Tools", description:"Save quick notes alongside the pages you are researching.", icon:"N" },
+  { id:"privacy-shield", name:"Privacy Shield", version:"1.0.0", category:"Privacy", description:"A clear place to review privacy controls for installed extensions.", icon:"◆" },
+  { id:"tron-inbox-tools", name:"TRON Inbox Tools", version:"1.0.0", category:"TRON", description:"Bring your TRON Inbox workflows closer to the browser surface.", icon:"✉" }
+];
+let customShortcuts = [];
+let installedStoreItems = [];
 const tabStrip = document.getElementById("tab-strip");
 const tabSearchButton = document.getElementById("tab-search");
 const tabSearchMenu = document.getElementById("tab-search-menu");
 const content = document.getElementById("browser-content");
 const addressInput = document.getElementById("address-input");
-const updateButton = document.getElementById("update-tron");
 
 function applyBuildInfo(info) {
   const version = info?.version || "unknown";
@@ -20,22 +29,31 @@ function applyBuildInfo(info) {
   });
 }
 
-function setUpdateButtons(label, disabled, title) {
-  [updateButton].concat(Array.from(document.querySelectorAll("[data-update]"))).forEach(function(button) {
-    button.disabled = disabled;
-    button.textContent = label;
-    if (title) button.title = title;
-  });
-}
-
-try {
-  window.localStorage.clear();
-  window.sessionStorage.clear();
-} catch (_) {
-  // Storage may be unavailable in hardened or first-run contexts.
-}
-
 function esc(value) { return String(value == null ? "" : value).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
+function loadCustomShortcuts() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SHORTCUT_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter(function(item) { return item && typeof item.label === "string" && typeof item.url === "string"; }).slice(0, 6) : [];
+  } catch (_) {
+    return [];
+  }
+}
+function saveCustomShortcuts() {
+  try { window.localStorage.setItem(SHORTCUT_STORAGE_KEY, JSON.stringify(customShortcuts)); } catch (_) {}
+}
+customShortcuts = loadCustomShortcuts();
+function loadInstalledStoreItems() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(STORE_INSTALL_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter(function(id) { return STORE_CATALOG.some(function(item) { return item.id === id; }); }) : [];
+  } catch (_) {
+    return [];
+  }
+}
+function saveInstalledStoreItems() {
+  try { window.localStorage.setItem(STORE_INSTALL_STORAGE_KEY, JSON.stringify(installedStoreItems)); } catch (_) {}
+}
+installedStoreItems = loadInstalledStoreItems();
 function svg(name) {
   const p = {
     plus:"<path d='M12 5v14M5 12h14'/>",
@@ -44,7 +62,8 @@ function svg(name) {
     sparkle:"<path d='m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Zm6.5 13 .8 2.7L22 19l-2.7.8L18.5 22l-.8-2.2L15 19l2.7-1.3.8-2.7Z' fill='currentColor' stroke='none'/>",
     arrow:"<path d='M5 12h13M13 6l6 6-6 6'/>",
     share:"<circle cx='18' cy='5' r='2'/><circle cx='6' cy='12' r='2'/><circle cx='18' cy='19' r='2'/><path d='m7.8 11 8.4-5M7.8 13l8.4 5'/>",
-    apps:"<circle cx='5' cy='5' r='1.6' fill='currentColor' stroke='none'/><circle cx='12' cy='5' r='1.6' fill='currentColor' stroke='none'/><circle cx='19' cy='5' r='1.6' fill='currentColor' stroke='none'/><circle cx='5' cy='12' r='1.6' fill='currentColor' stroke='none'/><circle cx='12' cy='12' r='1.6' fill='currentColor' stroke='none'/><circle cx='19' cy='12' r='1.6' fill='currentColor' stroke='none'/><circle cx='5' cy='19' r='1.6' fill='currentColor' stroke='none'/><circle cx='12' cy='19' r='1.6' fill='currentColor' stroke='none'/><circle cx='19' cy='19' r='1.6' fill='currentColor' stroke='none'/>"
+    apps:"<circle cx='5' cy='5' r='1.6' fill='currentColor' stroke='none'/><circle cx='12' cy='5' r='1.6' fill='currentColor' stroke='none'/><circle cx='19' cy='5' r='1.6' fill='currentColor' stroke='none'/><circle cx='5' cy='12' r='1.6' fill='currentColor' stroke='none'/><circle cx='12' cy='12' r='1.6' fill='currentColor' stroke='none'/><circle cx='19' cy='12' r='1.6' fill='currentColor' stroke='none'/><circle cx='5' cy='19' r='1.6' fill='currentColor' stroke='none'/><circle cx='12' cy='19' r='1.6' fill='currentColor' stroke='none'/><circle cx='19' cy='19' r='1.6' fill='currentColor' stroke='none'/>",
+    mail:"<rect x='3' y='5' width='18' height='14' rx='2'/><path d='m4 7 8 6 8-6'/>"
   };
   return "<svg class='ui-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'>" + (p[name] || "") + "</svg>";
 }
@@ -78,7 +97,7 @@ function renderTabs() {
   });
   renderTabSearchMenu();
 }
-function updateAddress(tab) { if (!tab) return; addressInput.value = tab.kind === "internal" ? (tab.route === "home" || tab.route === "chat" ? "" : "tron://search?q=" + encodeURIComponent(tab.query)) : tab.url; document.title = "TRON"; }
+function updateAddress(tab) { if (!tab) return; addressInput.value = tab.kind === "internal" ? (tab.route === "home" || tab.route === "chat" || tab.route === "store" ? "" : "tron://search?q=" + encodeURIComponent(tab.query)) : tab.url; document.title = "TRON"; }
 function syncContentVisibility(tab) {
   const activeWebview = tab && tab.kind === "external" ? tab.webview : null;
   content.querySelectorAll(".internal-page").forEach(function(page) { page.style.display = tab && tab.kind === "internal" ? "" : "none"; });
@@ -125,7 +144,16 @@ function box(query,compact) {
   return "<div class='search-box-wrap" + (compact ? " compact" : "") + "'><form class='search-form' data-search-form><div class='search-shell'><span class='search-plus'>" + svg("plus") + "</span><input name='q' value='" + esc(query || "") + "' placeholder='Ask TRON' autocomplete='off' spellcheck='false'><button type='button' class='search-action'>" + svg("mic") + "</button><button type='button' class='search-action disabled-action' disabled>" + svg("lens") + "</button><a class='ai-button' data-infinity href='tron://infinity'>" + svg("sparkle") + "<span>Ask Infinity</span>" + svg("arrow") + "</a></div></form></div>";
 }
 function homeHtml() {
-  return "<main class='tron-page home-page'><header class='home-header'><a class='home-brand' data-home href='#'>TRON</a><nav class='home-nav'><button class='download-button' data-update type='button'>Install latest TRON</button></nav></header><section class='home-content'><div class='home-center'><img class='hero-logo' src='./tron-wordmark.png' alt='TRON logo'>" + box("",false) + "</div><p class='home-version' data-build-info>TRON local build</p></section></main>";
+  const custom = customShortcuts.map(function(item) { return "<a class='shortcut' data-external='" + esc(item.url) + "' data-external-title='" + esc(item.label) + "' href='" + esc(item.url) + "'><span class='shortcut-icon shortcut-icon-custom'>" + esc(item.label.trim().charAt(0).toUpperCase()) + "</span><span>" + esc(item.label.trim()) + "</span></a>"; }).join("");
+  const shortcuts = "<nav class='shortcuts' aria-label='TRON shortcuts'><a class='shortcut' data-external='" + esc(INFINITY_URL) + "' data-external-title='Infinity' href='" + esc(INFINITY_URL) + "'><span class='shortcut-icon'><img src='./tron-logo.png' alt=''></span><span>Infinity</span></a><a class='shortcut' data-external='" + esc(INBOX_URL) + "' data-external-title='TRON Inbox' href='" + esc(INBOX_URL) + "'><span class='shortcut-icon shortcut-icon-inbox'>" + svg("mail") + "</span><span>TRON Inbox</span></a>" + custom + "<button class='shortcut shortcut-add' data-add-shortcut type='button'><span class='shortcut-icon shortcut-icon-add'>" + svg("plus") + "</span><span>Add shortcut</span></button></nav>";
+  return "<main class='tron-page home-page'><header class='home-header'><a class='home-brand' data-home href='#'>TRON</a></header><section class='home-content'><div class='home-center'><img class='hero-logo' src='./tron-wordmark.png' alt='TRON logo'>" + box("",false) + shortcuts + "</div><p class='home-version' data-build-info>TRON local build</p></section></main>";
+}
+function storeHtml() {
+  const cards = STORE_CATALOG.map(function(item) {
+    const installed = installedStoreItems.includes(item.id);
+    return "<article class='store-card" + (installed ? " is-installed" : "") + "' data-store-card data-store-search-text='" + esc((item.name + " " + item.category + " " + item.description).toLowerCase()) + "'><div class='store-card-top'><span class='store-card-icon'>" + esc(item.icon) + "</span></div><h3>" + esc(item.name) + "</h3><p>" + esc(item.description) + "</p><div class='store-card-footer'><span>v" + esc(item.version) + "</span><button class='store-install' data-store-install data-store-id='" + esc(item.id) + "' type='button'" + (installed ? " disabled" : "") + ">" + (installed ? "Downloaded" : "Download") + "</button></div></article>";
+  }).join("");
+  return "<main class='tron-page store-page'><header class='store-header'><div class='store-header-bar'><span class='store-wordmark'>TronStore</span><label class='store-search'><span class='store-search-icon' aria-hidden='true'></span><input data-store-search type='search' placeholder='Search extensions' autocomplete='off' spellcheck='false'></label><button class='store-account' data-store-account type='button' aria-label='Guest account'><span class='store-account-avatar' aria-hidden='true'></span><span>Guest</span></button></div></header><section class='store-content'><div class='store-section-heading'><div><span class='store-eyebrow'>CURATED FOR YOU</span><h2>Discover extensions</h2></div><span class='store-count'>" + STORE_CATALOG.length + " available now</span></div><div class='store-grid' data-store-grid>" + cards + "</div></section></main>";
 }
 function dateText(value) { const d=new Date(value); return Number.isNaN(d.getTime()) ? "Stored locally" : "Stored " + new Intl.DateTimeFormat("en",{dateStyle:"medium"}).format(d); }
 function resultHtml(r) {
@@ -143,16 +171,20 @@ function resultsHtml(tab) {
 }
 function renderInternal(tab) {
   content.querySelectorAll(".internal-page").forEach(function(n){n.remove();});
-  const page=document.createElement("div"); page.className="internal-page"; page.dataset.tabId=tab.id; page.innerHTML=tab.route==="home" ? homeHtml() : tab.route==="chat" ? window.tronChat.render(tab) : resultsHtml(tab); content.append(page); syncContentVisibility(tab); bind(page,tab); if(tab.route==="chat") window.tronChat.bind(page,tab,function(){renderInternal(tab);});
+  const page=document.createElement("div"); page.className="internal-page"; page.dataset.tabId=tab.id; page.innerHTML=tab.route==="home" ? homeHtml() : tab.route==="chat" ? window.tronChat.render(tab) : tab.route==="store" ? storeHtml() : resultsHtml(tab); content.append(page); syncContentVisibility(tab); bind(page,tab); if(tab.route==="chat") window.tronChat.bind(page,tab,function(){renderInternal(tab);});
 }
 function bind(page,tab) {
   page.querySelectorAll("[data-search-form]").forEach(function(form){form.addEventListener("submit",function(e){e.preventDefault();const q=new FormData(form).get("q");if(typeof q==="string")search(q,1,tab);});});
   page.querySelectorAll("[data-shortcut-query]").forEach(function(a){a.onclick=function(e){e.preventDefault();search(a.dataset.shortcutQuery,1,tab);};});
   page.querySelectorAll("[data-result-link]").forEach(function(a){a.onclick=function(e){e.preventDefault();external(a.href,a.textContent.trim() || "Web page");};});
+  page.querySelectorAll("[data-external]").forEach(function(a){a.onclick=function(e){e.preventDefault();external(a.dataset.external,a.dataset.externalTitle || a.textContent.trim() || "Web page");};});
+  page.querySelectorAll("[data-add-shortcut]").forEach(function(button){button.onclick=function(){const label=window.prompt("Shortcut name");if(!label || !label.trim())return;const rawUrl=window.prompt("Shortcut URL","https://");if(!rawUrl || !rawUrl.trim())return;let parsed;try{parsed=new URL(rawUrl.trim());if(!["http:","https:"].includes(parsed.protocol))throw new Error("Unsupported protocol");}catch(_){window.alert("Enter a valid http or https URL.");return;}customShortcuts.push({label:label.trim().slice(0,32),url:parsed.toString()});saveCustomShortcuts();renderInternal(tab);};});
+  page.querySelectorAll("[data-store-search]").forEach(function(input){input.addEventListener("input",function(){const query=input.value.trim().toLowerCase();page.querySelectorAll("[data-store-card]").forEach(function(card){card.hidden=Boolean(query && !card.dataset.storeSearchText.includes(query));});});});
+  page.querySelectorAll("[data-store-install]").forEach(function(button){button.onclick=function(){const id=button.dataset.storeId;if(!id || installedStoreItems.includes(id))return;installedStoreItems.push(id);saveInstalledStoreItems();button.disabled=true;button.textContent="Downloaded";button.closest(".store-card").classList.add("is-installed");};});
+  page.querySelectorAll("[data-store-account]").forEach(function(button){button.onclick=function(){document.getElementById("profile").click();};});
   page.querySelectorAll("[data-page]").forEach(function(a){a.onclick=function(e){e.preventDefault();search(tab.query,Number(a.dataset.page),tab);};});
   page.querySelectorAll("[data-home]").forEach(function(a){a.onclick=function(e){e.preventDefault();showHome(tab);};});
   page.querySelectorAll("[data-infinity]").forEach(function(a){a.onclick=function(e){e.preventDefault();showChat(tab);};});
-  page.querySelectorAll("[data-update]").forEach(function(a){a.onclick=function(){installLatest();};});
   page.querySelectorAll("[data-retry]").forEach(function(a){a.onclick=function(e){e.preventDefault();search(tab.query,tab.page,tab);};});
 }
 async function search(query,pageNumber,tab) {
@@ -164,11 +196,12 @@ async function search(query,pageNumber,tab) {
 }
 function showHome(tab) { tab=ensureInternal(tab); if(!tab) return; tab.searchToken=Symbol("home"); tab.route="home";tab.query="";tab.page=1;tab.data=null;tab.loading=false;tab.error=null;tab.title="TRON";renderTabs();updateAddress(tab);renderInternal(tab); }
 function showChat(tab) { tab=ensureInternal(tab); if(!tab) return; tab.searchToken=Symbol("chat"); tab.route="chat";tab.query="";tab.page=1;tab.loading=false;tab.error=null;tab.title="General Chat";if(!tab.chat) tab.chat=window.tronChat.createState();renderTabs();updateAddress(tab);renderInternal(tab); }
+function showStore(tab) { tab=ensureInternal(tab); if(!tab) return; tab.searchToken=Symbol("store"); tab.route="store";tab.query="";tab.page=1;tab.loading=false;tab.error=null;tab.title="TRON Store";renderTabs();updateAddress(tab);renderInternal(tab); }
 function activate(id) { if(!tabs.some(function(tab){return tab.id===id;}))return; if(activeTabId===id){const same=current();syncContentVisibility(same);renderTabs();updateAddress(same);return;} activeTabId=id;const tab=current();if(tab && tab.kind==="internal")renderInternal(tab);else syncContentVisibility(tab);renderTabs();updateAddress(tab); }
 function finishCloseTab(id) { const i=tabs.findIndex(function(t){return t.id===id;});if(i<0)return;const old=tabs.splice(i,1)[0];if(old.webview)old.webview.remove();if(!tabs.length){const t=newInternal();tabs.push(t);activate(t.id);}else if(activeTabId===id)activate(tabs[Math.max(0,i-1)].id);else renderTabs(); }
 function closeTab(id) { const tab=tabs.find(function(t){return t.id===id;});if(!tab || tab.closing)return;tab.closing=true;const node=Array.from(tabStrip.children).find(function(item){return item.dataset.tabId===id;});if(!node)return finishCloseTab(id);node.classList.add("tab-exiting");node.setAttribute("aria-hidden","true");window.setTimeout(function(){finishCloseTab(id);},210); }
-function destination(value) { const v=String(value || "").trim();if(!v)return {kind:"home"};if(/^tron:\/\/infinity\/?$/i.test(v))return {kind:"chat"};if(/^tron:\/\/search\?q=/i.test(v))return {kind:"search",query:new URL(v).searchParams.get("q") || ""};if(/^[a-z][a-z\d+.-]*:\/\//i.test(v))return {kind:"external",url:v};if(/^(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/.*)?$/i.test(v))return {kind:"external",url:"http://" + v};if(/^[^\s]+\.[^\s]+(\/.*)?$/i.test(v))return {kind:"external",url:"https://" + v};return {kind:"search",query:v}; }
-function navigate(value) { const d=destination(value),t=current();if(d.kind==="home")return showHome(t);if(d.kind==="chat")return showChat(t);if(d.kind==="search"){const s=ensureInternal(t) || newInternal();if(!tabs.includes(s))tabs.push(s);activate(s.id);return search(d.query,1,s);}return navigateExternal(d.url); }
+function destination(value) { const v=String(value || "").trim();if(!v)return {kind:"home"};if(/^tron:\/\/infinity\/?$/i.test(v))return {kind:"chat"};if(/^tron:\/\/store\/?$/i.test(v))return {kind:"store"};if(/^tron:\/\/search\?q=/i.test(v))return {kind:"search",query:new URL(v).searchParams.get("q") || ""};if(/^[a-z][a-z\d+.-]*:\/\//i.test(v))return {kind:"external",url:v};if(/^(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/.*)?$/i.test(v))return {kind:"external",url:"http://" + v};if(/^[^\s]+\.[^\s]+(\/.*)?$/i.test(v))return {kind:"external",url:"https://" + v};return {kind:"search",query:v}; }
+function navigate(value) { const d=destination(value),t=current();if(d.kind==="home")return showHome(t);if(d.kind==="chat")return showChat(t);if(d.kind==="store")return showStore(t);if(d.kind==="search"){const s=ensureInternal(t) || newInternal();if(!tabs.includes(s))tabs.push(s);activate(s.id);return search(d.query,1,s);}return navigateExternal(d.url); }
 
 document.getElementById("new-tab").onclick=function(){const t=newInternal();t.entering=true;tabs.push(t);activate(t.id);};
 tabSearchButton.onclick=function(event){event.stopPropagation();tabSearchMenu.hidden=!tabSearchMenu.hidden;renderTabSearchMenu();};
@@ -178,32 +211,14 @@ document.getElementById("go-back").onclick=function(){const t=current();if(t && 
 document.getElementById("go-forward").onclick=function(){const t=current();if(t && t.kind==="external" && t.webview.canGoForward())t.webview.goForward();};
 document.getElementById("reload-page").onclick=function(){const t=current();if(t && t.kind==="external")t.webview.reload();else if(t && t.route==="results")search(t.query,t.page,t);};
 document.getElementById("bookmark-page").onclick=function(){addressInput.focus();};
-document.getElementById("extensions").onclick=function(){addressInput.blur();};
+document.getElementById("extensions").onclick=function(){showStore(current());};
 document.getElementById("profile").onclick=function(){addressInput.blur();};
 document.getElementById("browser-menu").onclick=function(){addressInput.blur();};
 document.getElementById("minimize-window").onclick=function(){window.tronDesktop.minimize();};
 document.getElementById("maximize-window").onclick=function(){window.tronDesktop.toggleMaximize();};
 document.getElementById("close-window").onclick=function(){window.tronDesktop.close();};
-async function installLatest() {
-  if (latestInstallInProgress) return;
-  const buildInfo = await window.tronDesktop.getBuildInfo().catch(function() { return {}; });
-  if (buildInfo.dirty === true) {
-    setUpdateButtons("Local changes protected", false, "This local TRON build contains local changes, so the official updater is disabled.");
-    return;
-  }
-  latestInstallInProgress = true;
-  setUpdateButtons("Checking release…", true, "Reading the signed TRON release metadata");
-  try {
-    await window.tronDesktop.installLatest();
-  } catch (error) {
-    latestInstallInProgress = false;
-    setUpdateButtons("Retry latest install", false, error instanceof Error ? error.message : "TRON could not install the latest release.");
-  }
-}
-updateButton.onclick=installLatest;
 document.addEventListener("keydown",function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="l"){e.preventDefault();addressInput.focus();addressInput.select();}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="t"){e.preventDefault();const t=newInternal();t.entering=true;tabs.push(t);activate(t.id);}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="w"){e.preventDefault();if(activeTabId)closeTab(activeTabId);}});
-window.tronDesktop.onUpdateStatus(function(s){if(latestInstallInProgress && s.state!=="installing" && s.state!=="error")return;if(s.state==="checking"){setUpdateButtons("Checking release…",true);}else if(s.state==="downloading"){setUpdateButtons(s.percent ? "Downloading " + s.percent + "%" : "Downloading…",true);}else if(s.state==="installing"){setUpdateButtons("Installing latest…",true);}else if(s.state==="ready"){updateReady=true;setUpdateButtons("Restart to update",false);}else if(s.state==="current"){updateReady=false;setUpdateButtons("Install latest TRON",false);}else if(s.state==="local-changes"){updateReady=false;latestInstallInProgress=false;setUpdateButtons("Local changes protected",false,s.message || "This local build contains local changes, so official updates are disabled.");}else if(s.state==="error"){updateReady=false;latestInstallInProgress=false;setUpdateButtons("Retry latest install",false,s.message || "TRON could not install the latest release.");}});
 const first=newInternal();tabs.push(first);activate(first.id);
-window.tronRenderer={showHome:showHome,showChat:showChat};
+window.tronRenderer={showHome:showHome,showChat:showChat,showStore:showStore};
 window.tronDesktop.getBuildInfo().then(applyBuildInfo).catch(function() {});
 

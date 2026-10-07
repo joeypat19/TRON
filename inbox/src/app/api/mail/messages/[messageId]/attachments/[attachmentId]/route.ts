@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { authApiErrorResponse } from "@/lib/auth/api";
+import { requireAuthenticatedUser } from "@/lib/auth/session";
 import { decodeBase64UrlToBuffer } from "@/lib/gmail/decode";
 import { GmailAuthError } from "@/lib/gmail/client";
 import { MicrosoftAccessError } from "@/lib/microsoft/client";
@@ -10,6 +12,12 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ messageId: string; attachmentId: string }> },
 ) {
+  try {
+    await requireAuthenticatedUser();
+  } catch (error) {
+    return authApiErrorResponse(error) ?? NextResponse.json({ error: "Authentication is required." }, { status: 401 });
+  }
+
   const { messageId, attachmentId } = await context.params;
   const mailbox = await getPrimaryConnectedMailboxForCurrentUser();
 

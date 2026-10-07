@@ -23,6 +23,74 @@ enum MailboxAccountStatus {
   DISABLED
 }
 
+enum AuthUserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum AuthTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  LOGIN_CODE_RESET
+}
+
+model TronUser {
+  id                 String        @id @default(cuid())
+  email              String        @unique
+  displayName        String?
+  passwordHash       String
+  loginCodeHash      String
+  loginCodeLength    Int
+  emailVerifiedAt    DateTime?
+  status             AuthUserStatus @default(ACTIVE)
+  failedLoginAttempts Int          @default(0)
+  lockedUntil        DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  sessions           AuthSession[]
+  challenges         AuthLoginChallenge[]
+  recoveryTokens     AuthRecoveryToken[]
+
+  @@index([status])
+}
+
+model AuthSession {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  user       TronUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model AuthLoginChallenge {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  attempts   Int      @default(0)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  user       TronUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model AuthRecoveryToken {
+  id         String        @id @default(cuid())
+  userId     String
+  tokenHash  String        @unique
+  type       AuthTokenType
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime      @default(now())
+  user       TronUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, expiresAt])
+}
+
 model UserMailboxAccount {
   id                   String               @id @default(cuid())
   ownerId              String @map("clerkUserId")

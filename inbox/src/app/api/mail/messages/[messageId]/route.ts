@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { authApiErrorResponse } from "@/lib/auth/api";
 import { GmailAuthError, getGmailAccessState } from "@/lib/gmail/client";
 import { MicrosoftAccessError } from "@/lib/microsoft/client";
 import { getPrimaryConnectedMailboxForCurrentUser, requireSession } from "@/lib/mail/accounts";
@@ -82,7 +83,7 @@ export async function GET(
       htmlBody: message.htmlBody ?? null,
     });
   } catch (error) {
-    return NextResponse.json({ error: getActionErrorMessage(error) }, { status: 500 });
+    return authApiErrorResponse(error) ?? NextResponse.json({ error: getActionErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -122,6 +123,6 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json({ error: getActionErrorMessage(error) }, { status: 500 });
+    return authApiErrorResponse(error) ?? NextResponse.json({ error: getActionErrorMessage(error) }, { status: 500 });
   }
 }

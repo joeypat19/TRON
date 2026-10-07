@@ -1,11 +1,18 @@
 import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { BrandCard } from "@/components/ui/brand-card";
 import { BrandPageShell } from "@/components/ui/brand-page-shell";
+import { appPath } from "@/lib/app-path";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 import { getMailboxSetupDebugSnapshot } from "@/lib/mail/accounts";
 
 export default async function MailboxSetupDebugPage() {
   if (process.env.NODE_ENV === "production") {
     notFound();
+  }
+
+  if (!(await getAuthenticatedUser())) {
+    redirect(appPath("/auth"));
   }
 
   const snapshot = await getMailboxSetupDebugSnapshot();

@@ -4,6 +4,8 @@ import { MailboxAccountStatus, MailboxProvider } from "@prisma/client";
 import { cookies } from "next/headers";
 import { cache } from "react";
 import { db } from "@/lib/db";
+import { getAuthenticatedUser, requireAuthenticatedUser } from "@/lib/auth/session";
+import { getTronMailboxAddress } from "@/lib/auth/service";
 import type { ConnectedMailboxAccount } from "@/lib/mail/providers/types";
 import {
   getMailboxLoadStateFromReason,
@@ -12,9 +14,6 @@ import {
   type MailboxLoadState,
 } from "@/lib/mailbox-state";
 import { getMailboxSetupDiagnostic, type MailboxSetupCode } from "@/lib/mail/setup-diagnostics";
-
-const TRON_MAIL_DOMAIN = "tronxvi.com";
-const PUBLIC_TRON_USER_ID = "troninbox-public";
 
 export type SessionUser = {
   id: string;
@@ -49,20 +48,17 @@ export const ACTIVE_MAILBOX_COOKIE_NAME = "troninbox_active_mailbox";
 export const AUTO_GMAIL_CONNECT_FAILURE_COOKIE_NAME = "troninbox_auto_gmail_connect_failure";
 
 export const requireSessionUser = cache(async (): Promise<SessionUser> => {
+  const authenticatedUser = await requireAuthenticatedUser();
+
   return {
-    id: PUBLIC_TRON_USER_ID,
-    name: "TRON Mail",
-    email: `inbox@${TRON_MAIL_DOMAIN}`,
+    id: authenticatedUser.id,
+    name: authenticatedUser.displayName,
+    email: authenticatedUser.email,
     image: null,
   };
 });
 
 export const requireSession = requireSessionUser;
-
-function getTronMailboxAddress(userId: string) {
-  const suffix = userId.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(-18) || "account";
-  return `user-${suffix}@${TRON_MAIL_DOMAIN}`;
-}
 
 async function getRequestedActiveMailboxId() {
   const cookieStore = await cookies();
@@ -249,15 +245,16 @@ export async function getSafeDatabaseRuntimeDiagnostics(route: string, userId: s
 }
 
 export async function getMailboxSetupDebugSnapshot() {
-  const userId = PUBLIC_TRON_USER_ID;
+  const authenticatedUser = await getAuthenticatedUser();
+  const userId = authenticatedUser?.id ?? null;
   const database = await getSafeDatabaseRuntimeDiagnostics("/debug/mailbox-setup", userId);
   const finalCode = database.failureReason ?? "READY";
 
   return {
     route: "/debug/mailbox-setup",
-    sessionPresent: true,
+    sessionPresent: Boolean(authenticatedUser),
     ownerId: userId,
-    sessionIdPresent: false,
+    sessionIdPresent: Boolean(authenticatedUser),
     googleExternalAccountCount: 0,
     tokenProviderDiagnostics: { google: { ok: false }, oauthGoogle: { ok: false }, selectedProvider: null },
     gmailScopePresence: [],

@@ -18,8 +18,7 @@ vi.mock("@/lib/mail/mail-page-data", () => ({
 }));
 
 vi.mock("@/lib/mail/accounts", () => ({
-  attemptAutomaticGmailConnectionForCurrentUser: (...args: unknown[]) =>
-    mockAttemptAutomaticGmailConnectionForCurrentUser(...args),
+  attemptAutomaticGmailConnectionForCurrentUser: () => mockAttemptAutomaticGmailConnectionForCurrentUser(),
 }));
 
 vi.mock("next/navigation", () => ({

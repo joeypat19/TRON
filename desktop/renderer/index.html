@@ -23,19 +23,18 @@
       </header>
 
       <div class="toolbar">
-        <button class="toolbar-button" id="go-back" aria-label="Back" title="Back"></button>
-        <button class="toolbar-button muted" id="go-forward" aria-label="Forward" title="Forward"></button>
-        <button class="toolbar-button" id="reload-page" aria-label="Reload" title="Reload"></button>
+        <button class="toolbar-button" id="go-back" aria-label="Back" title="Back"><svg class="toolbar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5M8.5 12h8.5"></path></svg></button>
+        <button class="toolbar-button muted" id="go-forward" aria-label="Forward" title="Forward"><svg class="toolbar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m9.5 5.5 6.5 6.5-6.5 6.5M15.5 12H7"></path></svg></button>
+        <button class="toolbar-button" id="reload-page" aria-label="Reload" title="Reload"><svg class="toolbar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M19.5 9A8 8 0 1 0 20 14"></path><path d="M19.5 4.5V9H15"></path></svg></button>
         <form class="address-form" id="address-form">
-          <span class="site-icon" aria-hidden="true">G</span>
+          <span class="site-icon" aria-hidden="true">T</span>
           <input id="address-input" aria-label="Address and search bar" autocomplete="off" spellcheck="false" />
-          <button class="address-action" id="bookmark-page" type="button" aria-label="Bookmark page" title="Bookmark page"></button>
+          <button class="address-action" id="bookmark-page" type="button" aria-label="Bookmark page" title="Bookmark page"><svg class="toolbar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.9L12 3.5Z"></path></svg></button>
         </form>
-        <button class="update-button" id="update-tron" type="button" aria-label="Install the latest TRON" title="Install the latest TRON">Install latest TRON</button>
         <span class="toolbar-divider" aria-hidden="true"></span>
-        <button class="toolbar-button" id="extensions" aria-label="Extensions" title="Extensions"></button>
-        <button class="toolbar-button profile" id="profile" aria-label="Profile" title="TRON profile"></button>
-        <button class="toolbar-button" id="browser-menu" aria-label="Menu" title="Menu"></button>
+        <button class="toolbar-button" id="extensions" aria-label="Extensions" title="Extensions"><svg class="toolbar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 4h4v3a2 2 0 1 0 4 0V4h4v4h-3a2 2 0 1 0 0 4h3v4h-4v-3a2 2 0 1 0-4 0v3H8v-4h3a2 2 0 1 0 0-4H8V4Z"></path></svg></button>
+        <button class="toolbar-button profile profile-guest" id="profile" aria-label="Guest profile" title="Guest profile"></button>
+        <button class="toolbar-button" id="browser-menu" aria-label="Menu" title="Menu"><svg class="toolbar-icon toolbar-menu-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="19" cy="12" r="1.4"></circle></svg></button>
       </div>
 
       <main class="browser-content" id="browser-content" aria-label="Browser pages"></main>
