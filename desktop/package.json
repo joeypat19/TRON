@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "build-info": "node scripts/write-build-info.cjs",
-    "verify": "node --check main.cjs && node --check preload.cjs && node --check renderer/renderer.js",
+    "verify": "node --check main.cjs && node --check preload.cjs && node --check renderer/renderer.js && node --check renderer/chat.js",
     "dist": "npm run build-info && electron-builder --win nsis",
     "dist:dir": "npm run build-info && electron-builder --win dir",
     "release:check": "node scripts/validate-release.cjs",
@@ -36,7 +36,7 @@
       "releaseType": "release"
     },
     "win": {
-      "icon": "assets/tron-logo.ico",
+      "icon": "renderer/tron-logo.png",
       "target": [
         {
           "target": "nsis",

@@ -2,6 +2,14 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("tronDesktop", {
   search: (query, page = 1, limit = 10) => ipcRenderer.invoke("tron:search", { query, page, limit }),
+  startChat: (request) => ipcRenderer.invoke("tron:chat-start", request),
+  cancelChat: (requestId) => ipcRenderer.send("tron:chat-cancel", requestId),
+  pickAttachments: () => ipcRenderer.invoke("tron:pick-attachments"),
+  onChatEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("tron:chat-event", listener);
+    return () => ipcRenderer.removeListener("tron:chat-event", listener);
+  },
   getBuildInfo: () => ipcRenderer.invoke("tron:get-build-info"),
   installLatest: () => ipcRenderer.invoke("tron:install-latest"),
   onUpdateStatus: (callback) => {

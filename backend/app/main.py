@@ -31,6 +31,7 @@ from .crawler import (
     initialize_crawler_database,
     runtime as crawler_runtime,
 )
+from .chat import ChatRequest, stream_chat
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -126,7 +127,7 @@ class CrawlerSeedsRequest(BaseModel):
 
 
 class CrawlerStartRequest(BaseModel):
-    discover_links: bool = True
+    discover_links: bool = False
 
 
 class StoredResultItem:
@@ -1176,6 +1177,12 @@ def search(
     return response
 
 
+@app.post("/api/chat/stream")
+def chat_stream(payload: ChatRequest):
+    """Proxy the Infinity General Chat SSE contract for the desktop renderer."""
+    return stream_chat(payload)
+
+
 @app.get("/api/crawler/status")
 def crawler_status_route() -> dict[str, object]:
     with closing(database_connection()) as connection:
@@ -1205,7 +1212,9 @@ def start_crawler(payload: CrawlerStartRequest | None = None) -> dict[str, objec
         ).fetchone()[0]
     if not queued:
         raise HTTPException(status_code=400, detail="Crawler queue is empty. Add seed URLs first.")
-    discover_links = True if payload is None else payload.discover_links
+    if payload is not None and payload.discover_links:
+        raise HTTPException(status_code=409, detail="Automatic crawler queue growth is disabled.")
+    discover_links = False
     crawler_runtime.start(str(DATABASE_PATH), discover_links=discover_links)
     return {
         "enabled": CRAWLER_ENABLED,

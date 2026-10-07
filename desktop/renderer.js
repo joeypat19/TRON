@@ -56,8 +56,7 @@ function tabIcon(tab) {
 function renderTabs() {
   tabStrip.replaceChildren();
   tabs.forEach(function(tab) {
-    const entering = tab.entering === true; tab.entering = false;
-    const node = document.createElement("div"); node.className = "tab" + (tab.id === activeTabId ? " active" : "") + (entering ? " tab-entering" : ""); node.dataset.tabId = tab.id; node.title = tab.title || tab.url;
+    const node = document.createElement("div"); node.className = "tab" + (tab.id === activeTabId ? " active" : ""); node.title = tab.title || tab.url;
     node.onclick = function() { activate(tab.id); }; node.append(tabIcon(tab));
     const title = document.createElement("span"); title.className = "tab-title"; title.textContent = tab.title || "New tab"; node.append(title);
     const close = document.createElement("button"); close.className = "tab-close"; close.type = "button"; close.textContent = "×"; close.setAttribute("aria-label","Close tab");
@@ -65,53 +64,22 @@ function renderTabs() {
   });
 }
 function updateAddress(tab) { if (!tab) return; addressInput.value = tab.kind === "internal" ? (tab.route === "home" || tab.route === "chat" ? "" : "tron://search?q=" + encodeURIComponent(tab.query)) : tab.url; document.title = "TRON"; }
-function syncContentVisibility(tab) {
-  const activeWebview = tab && tab.kind === "external" ? tab.webview : null;
-  content.querySelectorAll(".internal-page").forEach(function(page) { page.style.display = tab && tab.kind === "internal" ? "" : "none"; });
-  content.querySelectorAll("webview").forEach(function(webview) { webview.style.display = webview === activeWebview ? "flex" : "none"; });
-}
-function createWebview(url) {
-  const webview = document.createElement("webview"); webview.setAttribute("partition","persist:tron"); webview.setAttribute("allowpopups",""); webview.src = url; return webview;
-}
-function bindExternalWebview(tab,webview) {
+function external(url,title) {
+  const webview = document.createElement("webview"); webview.setAttribute("partition","persist:tron"); webview.setAttribute("allowpopups",""); webview.src = url;
+  const tab = {id:"tab-" + (++tabSequence),kind:"external",title:title || "Loading…",url:url,favicon:null,webview:webview}; tabs.push(tab); content.append(webview);
   webview.addEventListener("did-start-loading",function(){tab.favicon=null;renderTabs();});
   webview.addEventListener("page-favicon-updated",function(e){tab.favicon=(e.favicons || []).find(function(x){return typeof x==="string" && (/^https?:\/\//i.test(x) || /^data:image\//i.test(x));}) || null;renderTabs();});
   webview.addEventListener("did-navigate",function(){tab.url=webview.getURL() || tab.url;if(activeTabId===tab.id)updateAddress(tab);});
   webview.addEventListener("did-navigate-in-page",function(){tab.url=webview.getURL() || tab.url;if(activeTabId===tab.id)updateAddress(tab);});
   webview.addEventListener("page-title-updated",function(e){tab.title=e.title || "TRON";renderTabs();});
   webview.addEventListener("new-window",function(e){e.preventDefault();external(e.url);});
-}
-function external(url,title) {
-  const webview = createWebview(url);
-  const tab = {id:"tab-" + (++tabSequence),kind:"external",title:title || "Loading…",url:url,favicon:null,webview:webview,entering:true}; tabs.push(tab); content.append(webview); bindExternalWebview(tab,webview);
   activate(tab.id); return tab;
-}
-function navigateExternal(url,title) {
-  const tab = current();
-  if (tab && tab.kind === "external") {
-    tab.url = url; tab.title = title || "Loading…"; tab.favicon = null; renderTabs(); updateAddress(tab); tab.webview.loadURL(url); return tab;
-  }
-  if (tab && tab.kind === "internal") {
-    const webview = createWebview(url);
-    tab.kind = "external"; tab.title = title || "Loading…"; tab.url = url; tab.favicon = null; tab.webview = webview;
-    delete tab.route; delete tab.query; delete tab.page; delete tab.data; delete tab.loading; delete tab.error; delete tab.chat;
-    content.append(webview); bindExternalWebview(tab,webview); activate(tab.id); return tab;
-  }
-  return external(url,title);
-}
-function ensureInternal(tab) {
-  if (!tab) return null;
-  if (tab.kind === "internal") return tab;
-  if (tab.webview) tab.webview.remove();
-  Object.assign(tab,{kind:"internal",title:"TRON",url:"tron://home",route:"home",query:"",page:1,data:null,loading:false,error:null,favicon:"./tron-logo.png"});
-  delete tab.webview;
-  return tab;
 }
 function box(query,compact) {
   return "<div class='search-box-wrap" + (compact ? " compact" : "") + "'><form class='search-form' data-search-form><div class='search-shell'><span class='search-plus'>" + svg("plus") + "</span><input name='q' value='" + esc(query || "") + "' placeholder='Ask TRON' autocomplete='off' spellcheck='false'><button type='button' class='search-action'>" + svg("mic") + "</button><button type='button' class='search-action disabled-action' disabled>" + svg("lens") + "</button><a class='ai-button' data-infinity href='tron://infinity'>" + svg("sparkle") + "<span>Ask Infinity</span>" + svg("arrow") + "</a></div></form></div>";
 }
 function homeHtml() {
-  return "<main class='tron-page home-page'><header class='home-header'><a class='home-brand' data-home href='#'>TRON</a><nav class='home-nav'><button class='download-button' data-update type='button'>Install latest TRON</button></nav></header><section class='home-content'><div class='home-center'><img class='hero-logo' src='./tron-wordmark.png' alt='TRON logo'>" + box("",false) + "</div><p class='home-version' data-build-info>TRON local build</p></section></main>";
+  return "<main class='tron-page home-page'><header class='home-header'><a class='home-brand' data-home href='#'><img src='./tron-logo.png' alt='TRON'></a><nav class='home-nav'><button class='download-button' data-update type='button'>Install latest TRON</button></nav></header><section class='home-content'><div class='home-center'><img class='hero-logo' src='./tron-wordmark.png' alt='TRON logo'>" + box("",false) + "</div><p class='home-version' data-build-info>TRON local build</p></section></main>";
 }
 function dateText(value) { const d=new Date(value); return Number.isNaN(d.getTime()) ? "Stored locally" : "Stored " + new Intl.DateTimeFormat("en",{dateStyle:"medium"}).format(d); }
 function resultHtml(r) {
@@ -125,11 +93,11 @@ function resultsHtml(tab) {
   const pages=Array.from({length:Math.min(total,9)},function(_,i){return i+1;});
   const tool=d.tool ? "<div class='tool-answer'><div class='tool-answer-heading'><span class='tool-answer-icon'>◷</span><span>Local time</span><span class='tool-answer-live'>Live</span></div><div class='tool-answer-time'>" + esc(d.tool.time) + "</div><div class='tool-answer-date'>" + esc(d.tool.date) + "</div><div class='tool-answer-location'>" + esc(d.tool.location) + "</div></div>" : "";
   const list=rs.length ? "<div class='results-list-column'><ol class='result-list'>" + rs.map(resultHtml).join("") + "</ol><nav class='pagination'><div class='pagination-wordmark'>Tr" + "o".repeat(Math.min(total,24)) + "n</div><div class='pagination-pages'>" + (tab.page>1 ? "<a data-page='" + (tab.page-1) + "' href='#'>Previous</a>" : "") + pages.map(function(p){return p===tab.page ? "<span class='pagination-current'>" + p + "</span>" : "<a data-page='" + p + "' href='#'>" + p + "</a>";}).join("") + (tab.page<total ? "<a data-page='" + (tab.page+1) + "' href='#'>Next</a>" : "") + "</div></nav></div>" : "<div class='results-state'><span class='state-symbol'>—</span><h1>No local results for “" + esc(tab.query) + "”</h1><p>TRON only searches its stored local results and did not find a match.</p></div>";
-  return "<main class='tron-page results-page'><header class='results-header'><div class='results-header-main'><a class='results-brand' data-home href='#'>TRON</a>" + box(tab.query,true) + "<div class='results-header-actions'><span class='results-avatar'>T</span></div></div></header><section class='results-content'>" + tool + list + "</section></main>";
+  return "<main class='tron-page results-page'><header class='results-header'><div class='results-header-main'><a class='results-brand' data-home href='#'><img src='./tron-logo.png' alt='TRON'></a>" + box(tab.query,true) + "<div class='results-header-actions'><span class='results-avatar'>T</span></div></div></header><section class='results-content'>" + tool + list + "</section></main>";
 }
 function renderInternal(tab) {
   content.querySelectorAll(".internal-page").forEach(function(n){n.remove();});
-  const page=document.createElement("div"); page.className="internal-page"; page.dataset.tabId=tab.id; page.innerHTML=tab.route==="home" ? homeHtml() : tab.route==="chat" ? window.tronChat.render(tab) : resultsHtml(tab); content.append(page); syncContentVisibility(tab); bind(page,tab); if(tab.route==="chat") window.tronChat.bind(page,tab,function(){renderInternal(tab);});
+  const page=document.createElement("div"); page.className="internal-page"; page.innerHTML=tab.route==="home" ? homeHtml() : tab.route==="chat" ? window.tronChat.render(tab) : resultsHtml(tab); content.append(page); bind(page,tab); if(tab.route==="chat") window.tronChat.bind(page,tab,function(){renderInternal(tab);});
 }
 function bind(page,tab) {
   page.querySelectorAll("[data-search-form]").forEach(function(form){form.addEventListener("submit",function(e){e.preventDefault();const q=new FormData(form).get("q");if(typeof q==="string")search(q,1,tab);});});
@@ -142,24 +110,22 @@ function bind(page,tab) {
   page.querySelectorAll("[data-retry]").forEach(function(a){a.onclick=function(e){e.preventDefault();search(tab.query,tab.page,tab);};});
 }
 async function search(query,pageNumber,tab) {
-  tab=ensureInternal(tab); const q=String(query || "").trim(); if(!q || !tab) return showHome(tab);
-  const requestToken=Symbol("search"); tab.searchToken=requestToken;
+  const q=query.trim(); if(!q || !tab || tab.kind!=="internal") return showHome(tab);
   tab.route="results"; tab.query=q; tab.page=pageNumber || 1; tab.title=q; tab.loading=true; tab.error=null; renderTabs(); updateAddress(tab); renderInternal(tab);
-  try { tab.data=await window.tronDesktop.search(q,tab.page,10); } catch(e) { if(tab.searchToken!==requestToken)return; tab.error=e instanceof Error ? e.message : "Search service unavailable."; }
-  if(tab.searchToken!==requestToken)return; tab.loading=false; if(activeTabId===tab.id) renderInternal(tab);
+  try { tab.data=await window.tronDesktop.search(q,tab.page,10); } catch(e) { tab.error=e instanceof Error ? e.message : "Search service unavailable."; }
+  tab.loading=false; if(activeTabId===tab.id) renderInternal(tab);
 }
-function showHome(tab) { tab=ensureInternal(tab); if(!tab) return; tab.searchToken=Symbol("home"); tab.route="home";tab.query="";tab.page=1;tab.data=null;tab.loading=false;tab.error=null;tab.title="TRON";renderTabs();updateAddress(tab);renderInternal(tab); }
-function showChat(tab) { tab=ensureInternal(tab); if(!tab) return; tab.searchToken=Symbol("chat"); tab.route="chat";tab.query="";tab.page=1;tab.loading=false;tab.error=null;tab.title="General Chat";if(!tab.chat) tab.chat=window.tronChat.createState();renderTabs();updateAddress(tab);renderInternal(tab); }
-function activate(id) { if(!tabs.some(function(tab){return tab.id===id;}))return; if(activeTabId===id){const same=current();syncContentVisibility(same);renderTabs();updateAddress(same);return;} activeTabId=id;const tab=current();if(tab && tab.kind==="internal")renderInternal(tab);else syncContentVisibility(tab);renderTabs();updateAddress(tab); }
-function finishCloseTab(id) { const i=tabs.findIndex(function(t){return t.id===id;});if(i<0)return;const old=tabs.splice(i,1)[0];if(old.webview)old.webview.remove();if(!tabs.length){const t=newInternal();tabs.push(t);activate(t.id);}else if(activeTabId===id)activate(tabs[Math.max(0,i-1)].id);else renderTabs(); }
-function closeTab(id) { const tab=tabs.find(function(t){return t.id===id;});if(!tab || tab.closing)return;tab.closing=true;const node=Array.from(tabStrip.children).find(function(item){return item.dataset.tabId===id;});if(!node)return finishCloseTab(id);node.classList.add("tab-exiting");node.setAttribute("aria-hidden","true");window.setTimeout(function(){finishCloseTab(id);},170); }
-function destination(value) { const v=String(value || "").trim();if(!v)return {kind:"home"};if(/^tron:\/\/infinity\/?$/i.test(v))return {kind:"chat"};if(/^tron:\/\/search\?q=/i.test(v))return {kind:"search",query:new URL(v).searchParams.get("q") || ""};if(/^[a-z][a-z\d+.-]*:\/\//i.test(v))return {kind:"external",url:v};if(/^(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/.*)?$/i.test(v))return {kind:"external",url:"http://" + v};if(/^[^\s]+\.[^\s]+(\/.*)?$/i.test(v))return {kind:"external",url:"https://" + v};return {kind:"search",query:v}; }
-function navigate(value) { const d=destination(value),t=current();if(d.kind==="home")return showHome(t);if(d.kind==="chat")return showChat(t);if(d.kind==="search"){const s=ensureInternal(t) || newInternal();if(!tabs.includes(s))tabs.push(s);activate(s.id);return search(d.query,1,s);}return navigateExternal(d.url); }
+function showHome(tab) { if(!tab || tab.kind!=="internal") return; tab.route="home";tab.query="";tab.page=1;tab.data=null;tab.loading=false;tab.error=null;tab.title="TRON";renderTabs();updateAddress(tab);renderInternal(tab); }
+function showChat(tab) { if(!tab || tab.kind!=="internal") return; tab.route="chat";tab.query="";tab.page=1;tab.loading=false;tab.error=null;tab.title="General Chat";if(!tab.chat) tab.chat=window.tronChat.createState();renderTabs();updateAddress(tab);renderInternal(tab); }
+function activate(id) { activeTabId=id;const tab=current();content.querySelectorAll("webview").forEach(function(v){v.style.display="none";});if(tab && tab.kind==="external")tab.webview.style.display="flex";if(tab && tab.kind==="internal")renderInternal(tab);renderTabs();updateAddress(tab); }
+function closeTab(id) { const i=tabs.findIndex(function(t){return t.id===id;});if(i<0)return;const old=tabs.splice(i,1)[0];if(old.webview)old.webview.remove();if(!tabs.length){const t=newInternal();tabs.push(t);activate(t.id);}else if(activeTabId===id)activate(tabs[Math.max(0,i-1)].id);else renderTabs(); }
+function destination(value) { const v=value.trim();if(!v)return {kind:"home"};if(/^tron:\/\/infinity\/?$/i.test(v))return {kind:"chat"};if(/^tron:\/\/search\?q=/i.test(v))return {kind:"search",query:new URL(v).searchParams.get("q") || ""};if(/^[a-z][a-z\d+.-]*:\/\//i.test(v))return {kind:"external",url:v};if(/^[^\s]+\.[^\s]+(\/.*)?$/i.test(v))return {kind:"external",url:"https://" + v};return {kind:"search",query:v}; }
+function navigate(value) { const d=destination(value),t=current();if(d.kind==="home")return t && t.kind==="internal" ? showHome(t) : null;if(d.kind==="chat")return t && t.kind==="internal" ? showChat(t) : null;if(d.kind==="search"){const s=t && t.kind==="internal" ? t : newInternal();if(!tabs.includes(s))tabs.push(s);activate(s.id);return search(d.query,1,s);}external(d.url); }
 
-document.getElementById("new-tab").onclick=function(){const t=newInternal();t.entering=true;tabs.push(t);activate(t.id);};
+document.getElementById("new-tab").onclick=function(){const t=newInternal();tabs.push(t);activate(t.id);};
 document.getElementById("address-form").onsubmit=function(e){e.preventDefault();navigate(addressInput.value);};
-document.getElementById("go-back").onclick=function(){const t=current();if(t && t.kind==="external"){if(t.webview.canGoBack())t.webview.goBack();}else if(t && t.route!=="home")showHome(t);};
-document.getElementById("go-forward").onclick=function(){const t=current();if(t && t.kind==="external" && t.webview.canGoForward())t.webview.goForward();};
+document.getElementById("go-back").onclick=function(){const t=current();if(t && t.kind==="external")t.webview.goBack();else showHome(t);};
+document.getElementById("go-forward").onclick=function(){const t=current();if(t && t.kind==="external")t.webview.goForward();};
 document.getElementById("reload-page").onclick=function(){const t=current();if(t && t.kind==="external")t.webview.reload();else if(t && t.route==="results")search(t.query,t.page,t);};
 document.getElementById("bookmark-page").onclick=function(){addressInput.focus();};
 document.getElementById("extensions").onclick=function(){addressInput.blur();};
@@ -170,11 +136,6 @@ document.getElementById("maximize-window").onclick=function(){window.tronDesktop
 document.getElementById("close-window").onclick=function(){window.tronDesktop.close();};
 async function installLatest() {
   if (latestInstallInProgress) return;
-  const buildInfo = await window.tronDesktop.getBuildInfo().catch(function() { return {}; });
-  if (buildInfo.dirty === true) {
-    setUpdateButtons("Local changes protected", false, "This local TRON build contains local changes, so the official updater is disabled.");
-    return;
-  }
   latestInstallInProgress = true;
   setUpdateButtons("Checking release…", true, "Reading the signed TRON release metadata");
   try {
@@ -185,9 +146,8 @@ async function installLatest() {
   }
 }
 updateButton.onclick=installLatest;
-document.addEventListener("keydown",function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="l"){e.preventDefault();addressInput.focus();addressInput.select();}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="t"){e.preventDefault();const t=newInternal();t.entering=true;tabs.push(t);activate(t.id);}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="w"){e.preventDefault();if(activeTabId)closeTab(activeTabId);}});
-window.tronDesktop.onUpdateStatus(function(s){if(latestInstallInProgress && s.state!=="installing" && s.state!=="error")return;if(s.state==="checking"){setUpdateButtons("Checking release…",true);}else if(s.state==="downloading"){setUpdateButtons(s.percent ? "Downloading " + s.percent + "%" : "Downloading…",true);}else if(s.state==="installing"){setUpdateButtons("Installing latest…",true);}else if(s.state==="ready"){updateReady=true;setUpdateButtons("Restart to update",false);}else if(s.state==="current"){updateReady=false;setUpdateButtons("Install latest TRON",false);}else if(s.state==="local-changes"){updateReady=false;latestInstallInProgress=false;setUpdateButtons("Local changes protected",false,s.message || "This local build contains local changes, so official updates are disabled.");}else if(s.state==="error"){updateReady=false;latestInstallInProgress=false;setUpdateButtons("Retry latest install",false,s.message || "TRON could not install the latest release.");}});
+document.addEventListener("keydown",function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="l"){e.preventDefault();addressInput.focus();addressInput.select();}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="t"){e.preventDefault();const t=newInternal();tabs.push(t);activate(t.id);}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="w"){e.preventDefault();if(activeTabId)closeTab(activeTabId);}});
+window.tronDesktop.onUpdateStatus(function(s){if(latestInstallInProgress && s.state!=="installing" && s.state!=="error")return;if(s.state==="checking"){setUpdateButtons("Checking release…",true);}else if(s.state==="downloading"){setUpdateButtons(s.percent ? "Downloading " + s.percent + "%" : "Downloading…",true);}else if(s.state==="installing"){setUpdateButtons("Installing latest…",true);}else if(s.state==="ready"){updateReady=true;setUpdateButtons("Restart to update",false);}else if(s.state==="current"){updateReady=false;setUpdateButtons("Install latest TRON",false);}else if(s.state==="error"){updateReady=false;latestInstallInProgress=false;setUpdateButtons("Retry latest install",false,s.message || "TRON could not install the latest release.");}});
 const first=newInternal();tabs.push(first);activate(first.id);
 window.tronRenderer={showHome:showHome,showChat:showChat};
 window.tronDesktop.getBuildInfo().then(applyBuildInfo).catch(function() {});
-

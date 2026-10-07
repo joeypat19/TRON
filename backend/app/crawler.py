@@ -14,6 +14,7 @@ import json
 import os
 import re
 import socket
+import ssl
 import sqlite3
 import threading
 import time
@@ -42,6 +43,17 @@ if truststore is not None:
     truststore.inject_into_ssl()
 
 
+def crawler_verify_value() -> str | ssl.SSLContext | bool:
+    """Use an explicit CA bundle or the Windows trusted certificate store."""
+
+    ca_bundle = os.getenv("TRON_CRAWLER_CA_BUNDLE", "").strip()
+    if ca_bundle:
+        return ca_bundle
+    if truststore is not None:
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    return True
+
+
 CRAWL_PAGES_FTS_TABLE = "crawl_pages_fts"
 CRAWL_RUNS_TABLE = "crawl_runs"
 CRAWL_EVENTS_TABLE = "crawl_events"
@@ -59,7 +71,9 @@ PER_DOMAIN_CONCURRENCY = max(1, min(CRAWLER_WORKERS, int(os.getenv("TRON_CRAWLER
 DNS_CACHE_TTL_SECONDS = max(1, int(os.getenv("TRON_CRAWLER_DNS_CACHE_TTL_SECONDS", "300")))
 SITEMAP_CACHE_TTL_SECONDS = max(60, int(os.getenv("TRON_CRAWLER_SITEMAP_CACHE_TTL_SECONDS", str(24 * 60 * 60))))
 MAX_LINKS_PER_PAGE = max(1, int(os.getenv("TRON_CRAWLER_MAX_LINKS_PER_PAGE", "2000")))
-MAX_QUEUE_SIZE = max(100, int(os.getenv("TRON_CRAWLER_MAX_QUEUE_SIZE", "250000")))
+# The crawler drains explicit seeds without growing the frontier from discovered
+# links or sitemaps. Keep a hard upper bound for any explicit seed additions.
+MAX_QUEUE_SIZE = max(100, int(os.getenv("TRON_CRAWLER_MAX_QUEUE_SIZE", "50000")))
 MAX_PAGES_PER_DOMAIN = max(0, int(os.getenv("TRON_CRAWLER_MAX_PAGES_PER_DOMAIN", "100000")))
 MAX_REDIRECTS = max(0, int(os.getenv("TRON_CRAWLER_MAX_REDIRECTS", "5")))
 LEASE_SECONDS = max(60, int(os.getenv("TRON_CRAWLER_LEASE_SECONDS", "300")))
@@ -889,18 +903,20 @@ class CrawlerRuntime:
         self.lock = threading.Lock()
         self.run_id: int | None = None
         self.enabled = False
-        self.discover_links = True
+        self.discover_links = False
 
     @property
     def running(self) -> bool:
         return bool(self.thread and self.thread.is_alive())
 
-    def start(self, database_path: str, *, discover_links: bool = True) -> None:
+    def start(self, database_path: str, *, discover_links: bool = False) -> None:
         with self.lock:
             if self.running:
                 return
             self.enabled = True
-            self.discover_links = discover_links
+            # Automatic queue growth is disabled by policy. The runtime only
+            # drains URLs already in the frontier.
+            self.discover_links = False
             with closing(sqlite3.connect(database_path, timeout=30)) as connection:
                 configure_crawler_connection(connection)
                 recover_in_progress(connection)
@@ -958,9 +974,7 @@ class CrawlerRuntime:
         concurrency_limiter: HostConcurrencyLimiter,
     ) -> None:
         worker_id = f"worker-{os.getpid()}-{threading.get_ident()}-{uuid.uuid4().hex[:8]}"
-        ca_bundle = os.getenv("TRON_CRAWLER_CA_BUNDLE", "").strip()
-        verify = ca_bundle or True
-        with httpx.Client(follow_redirects=False, http2=False, verify=verify) as client:
+        with httpx.Client(follow_redirects=False, http2=False, verify=crawler_verify_value()) as client:
             with closing(sqlite3.connect(database_path, timeout=30)) as connection:
                 configure_crawler_connection(connection)
                 while not self.stop_event.is_set():

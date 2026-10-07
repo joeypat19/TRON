@@ -27,6 +27,12 @@ uvicorn app.main:app --reload --port 938
 The internal API is available at `http://localhost:938` for the desktop app.
 TRON does not expose a website or API documentation route.
 
+General Chat is embedded in the desktop app at the internal `tron://infinity`
+route. Its FastAPI bridge forwards the `general_chat.request.v2` SSE contract
+to Infinity. Set `TRON_INFINITY_CHAT_URL` to override the upstream endpoint and
+`TRON_INFINITY_ACCESS_TOKEN` when the upstream requires an access token. These
+values belong in the local runtime environment and must not be committed.
+
 `GET /api/search?q=github&page=1&limit=10` searches the locally stored SQLite corpus. It does not call Brave or add new indexed data.
 
 ### Optional crawler
@@ -87,6 +93,11 @@ The `release-tron.yml` workflow validates the version, writes build identity
 metadata, creates the Windows NSIS installer, and publishes the installer,
 `latest.yml`, and blockmap. Installed TRON clients then discover the release
 through `electron-updater`.
+
+Local modified builds are marked dirty in `desktop/build-info.json`. Their
+automatic and manual official-update paths stay disabled so an upstream
+installer cannot overwrite local changes. A clean packaged release re-enables
+the normal updater.
 
 The home screen shows the running version and commit so local, packaged, and
 published builds can be distinguished immediately.

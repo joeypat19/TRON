@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, session } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell, session } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const { createHash } = require("node:crypto");
 const { spawn } = require("node:child_process");
@@ -15,6 +15,131 @@ const releaseDownloadBaseUrl = "https://github.com/joeypat19/TRON/releases/lates
 let mainWindow;
 let lastUpdateStatus = { state: "idle" };
 let latestInstallPromise = null;
+const chatRuns = new Map();
+
+function parseChatSseBlock(block) {
+  let eventName = "message";
+  const dataLines = [];
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith("event:")) eventName = line.slice(6).trim() || "message";
+    else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+  }
+  if (!dataLines.length) return null;
+  try {
+    const payload = JSON.parse(dataLines.join("\n"));
+    return { ...payload, event: payload.event || eventName };
+  } catch (_) {
+    return { event: eventName, raw: dataLines.join("\n") };
+  }
+}
+
+function sendChatEvent(payload) {
+  mainWindow?.webContents.send("tron:chat-event", payload);
+}
+
+async function runChat(request) {
+  const requestId = String(request?.request_id || "");
+  const controller = new AbortController();
+  chatRuns.set(requestId, controller);
+  try {
+    const url = new URL("/api/chat/stream", backendUrl);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { Accept: "text/event-stream", "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      signal: controller.signal,
+    });
+    if (!response.ok || !response.body) {
+      throw new Error(`TRON chat failed with status ${response.status}`);
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for await (const chunk of response.body) {
+      buffer += decoder.decode(chunk, { stream: true });
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() || "";
+      for (const block of blocks) {
+        const event = parseChatSseBlock(block);
+        if (event) sendChatEvent(event);
+      }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) {
+      const event = parseChatSseBlock(buffer);
+      if (event) sendChatEvent(event);
+    }
+  } catch (error) {
+    if (error?.name !== "AbortError") {
+      sendChatEvent({
+        event: "failed",
+        requestId,
+        sequence: Number.MAX_SAFE_INTEGER,
+        response: {
+          contract: "general_chat.response.v2",
+          requestId,
+          answer: null,
+          lifecycle: { phase: "complete" },
+          outcome: {
+            status: "failed",
+            code: "desktop_chat_transport_failed",
+            message: error instanceof Error ? error.message : "TRON chat transport failed.",
+            retryable: true,
+          },
+        },
+      });
+    }
+  } finally {
+    chatRuns.delete(requestId);
+  }
+}
+
+function attachmentKind(filePath, mimeType) {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType === "application/pdf" || filePath.toLowerCase().endsWith(".pdf")) return "pdf";
+  if (/\.(docx|xlsx|pptx)$/i.test(filePath)) return filePath.split(".").pop().toLowerCase();
+  return "text";
+}
+
+async function pickChatAttachments() {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: "Attach to General Chat",
+    properties: ["openFile", "multiSelections"],
+    filters: [
+      { name: "Supported files", extensions: ["txt", "md", "json", "csv", "pdf", "docx", "xlsx", "pptx", "png", "jpg", "jpeg", "webp"] },
+      { name: "All files", extensions: ["*"] },
+    ],
+  });
+  if (result.canceled) return [];
+  const maxBytes = 2 * 1024 * 1024;
+  const attachments = [];
+  for (const filePath of result.filePaths.slice(0, 12)) {
+    const stat = await fs.promises.stat(filePath);
+    if (stat.size > maxBytes) throw new Error(`${path.basename(filePath)} is larger than 2 MB.`);
+    const data = await fs.promises.readFile(filePath);
+    const mimeType = {
+      ".txt": "text/plain", ".md": "text/markdown", ".json": "application/json", ".csv": "text/csv",
+      ".pdf": "application/pdf", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+    }[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+    const item = {
+      id: `local-${Date.now()}-${attachments.length}`,
+      kind: attachmentKind(filePath, mimeType),
+      name: path.basename(filePath),
+      mimeType,
+      sizeBytes: stat.size,
+    };
+    if (mimeType.startsWith("text/" ) || mimeType === "application/json" || mimeType === "text/csv") {
+      item.textContent = data.toString("utf8").slice(0, 120000);
+    } else {
+      item.dataUrl = `data:${mimeType};base64,${data.toString("base64")}`;
+    }
+    attachments.push(item);
+  }
+  return attachments;
+}
 
 function readBuildInfo() {
   try {
@@ -70,6 +195,9 @@ async function downloadLatestInstaller() {
   if (latestInstallPromise) return latestInstallPromise;
 
   latestInstallPromise = (async () => {
+    if (readBuildInfo().dirty === true) {
+      throw new Error("This local TRON build contains local changes. The official updater is disabled so they cannot be overwritten.");
+    }
     sendUpdateStatus({ state: "checking" });
     const manifestResponse = await fetch(releaseManifestUrl, {
       headers: { Accept: "text/plain", "User-Agent": "TRON-desktop-updater" },
@@ -134,6 +262,11 @@ function configureAutoUpdates() {
     return;
   }
 
+  if (readBuildInfo().dirty === true) {
+    sendUpdateStatus({ state: "local-changes", message: "Local changes are protected from official updates." });
+    return;
+  }
+
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.on("checking-for-update", () => sendUpdateStatus({ state: "checking" }));
@@ -155,7 +288,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     frame: false,
-    icon: path.join(__dirname, "assets", "tron-logo.ico"),
+    icon: path.join(__dirname, "renderer", "tron-logo.png"),
     backgroundColor: "#0a0b12",
     show: false,
     webPreferences: {
@@ -170,8 +303,8 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
   mainWindow.webContents.on("did-finish-load", () => sendUpdateStatus(lastUpdateStatus));
   mainWindow.once("ready-to-show", () => {
-    mainWindow.maximize();
     mainWindow.show();
+    if (!mainWindow.isMaximized()) mainWindow.maximize();
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -204,6 +337,19 @@ app.whenReady().then(async () => {
     }
     return response.json();
   });
+  ipcMain.handle("tron:chat-start", async (_event, request) => {
+    if (!request || typeof request !== "object" || typeof request.request_id !== "string") {
+      throw new Error("Invalid TRON chat request.");
+    }
+    if (chatRuns.has(request.request_id)) chatRuns.get(request.request_id).abort();
+    void runChat(request);
+    return { requestId: request.request_id };
+  });
+  ipcMain.on("tron:chat-cancel", (_event, requestId) => {
+    const controller = chatRuns.get(String(requestId || ""));
+    if (controller) controller.abort();
+  });
+  ipcMain.handle("tron:pick-attachments", () => pickChatAttachments());
   ipcMain.handle("tron:get-build-info", () => getBuildInfo());
   ipcMain.handle("tron:install-latest", () => downloadLatestInstaller());
   ipcMain.on("tron:window-minimize", () => mainWindow?.minimize());
