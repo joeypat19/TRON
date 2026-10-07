@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("tronDesktop", {
   search: (query, page = 1, limit = 10) => ipcRenderer.invoke("tron:search", { query, page, limit }),
+  getMarketQuotes: () => ipcRenderer.invoke("tron:market-quotes"),
   startChat: (request) => ipcRenderer.invoke("tron:chat-start", request),
   cancelChat: (requestId) => ipcRenderer.send("tron:chat-cancel", requestId),
   pickAttachments: () => ipcRenderer.invoke("tron:pick-attachments"),

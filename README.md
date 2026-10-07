@@ -35,6 +35,15 @@ values belong in the local runtime environment and must not be committed.
 
 `GET /api/search?q=github&page=1&limit=10` searches the locally stored SQLite corpus. It does not call Brave or add new indexed data.
 
+The desktop URL toolbar also includes a shared 20-symbol market ticker. The
+backend caches one snapshot for 20 minutes so clients see the same values
+instead of each client making its own request. It uses Twelve Data when the
+configured local `TWELVE_DATA_API_KEY` permits the batch request, then falls
+back to Yahoo Finance's public chart metadata endpoint when that provider is
+unavailable or quota-limited. The fallback is still cached centrally and does
+not require another key. Provider keys belong only in the local runtime and
+must never be committed.
+
 ### Optional crawler
 
 The crawler is disabled unless `TRON_CRAWLER_ENABLED=true` is configured. Ten workers share one SQLite frontier and storage index; atomic claims, worker leases, canonical URL uniqueness, and restart recovery prevent duplicate work. Per-domain politeness limits keep concurrency bounded even when more workers are available. The main tuning variables are:

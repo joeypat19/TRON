@@ -337,6 +337,13 @@ app.whenReady().then(async () => {
     }
     return response.json();
   });
+  ipcMain.handle("tron:market-quotes", async () => {
+    const response = await fetch(new URL("/api/market/quotes", backendUrl));
+    if (!response.ok) {
+      throw new Error(`TRON market data failed with status ${response.status}`);
+    }
+    return response.json();
+  });
   ipcMain.handle("tron:chat-start", async (_event, request) => {
     if (!request || typeof request !== "object" || typeof request.request_id !== "string") {
       throw new Error("Invalid TRON chat request.");

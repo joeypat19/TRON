@@ -32,6 +32,7 @@ from .crawler import (
     runtime as crawler_runtime,
 )
 from .chat import ChatRequest, stream_chat
+from .market import market_quotes
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -441,6 +442,13 @@ def metrics() -> MetricsResponse:
             "API gateway is accepting traffic",
         ],
     )
+
+
+@app.get("/api/market/quotes")
+def market_quotes_route() -> dict[str, Any]:
+    """Return the shared cached market snapshot used by the desktop ticker."""
+
+    return market_quotes()
 
 
 def extract_result_items(payload: Any) -> list[StoredResultItem]:

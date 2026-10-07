@@ -37,7 +37,25 @@
         <button class="toolbar-button" id="browser-menu" aria-label="Menu" title="Menu"><svg class="toolbar-icon toolbar-menu-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"></circle><circle cx="12" cy="12" r="1.4"></circle><circle cx="19" cy="12" r="1.4"></circle></svg></button>
       </div>
 
-      <main class="browser-content" id="browser-content" aria-label="Browser pages"></main>
+      <nav class="market-ticker" id="market-ticker" aria-label="Market ticker">
+        <div class="market-ticker-track" id="market-ticker-track"></div>
+      </nav>
+
+      <div class="page-shell" id="page-shell">
+        <aside class="ads-sidebar" id="ads-sidebar" aria-label="Sponsored content">
+          <div class="ads-sidebar-header">
+            <span class="ads-sidebar-title">Sponsored</span>
+            <button class="ads-sidebar-toggle" id="ads-sidebar-toggle" type="button" aria-label="Minimise ads sidebar" title="Minimise ads sidebar" aria-controls="ads-sidebar" aria-expanded="true"><span aria-hidden="true"></span></button>
+          </div>
+          <div class="ads-sidebar-body" data-ad-slot="left-rail">
+            <div class="ads-sidebar-placeholder">
+              <span class="ads-sidebar-placeholder-label">Ad space</span>
+              <span class="ads-sidebar-placeholder-copy">Sponsored content will appear here.</span>
+            </div>
+          </div>
+        </aside>
+        <main class="browser-content" id="browser-content" aria-label="Browser pages"></main>
+      </div>
     </div>
     <script src="./chat.js"></script>
     <script src="./renderer.js"></script>

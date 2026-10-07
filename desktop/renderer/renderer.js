@@ -6,6 +6,9 @@ const INFINITY_URL = "https://infinity.tronxvi.com/?tool=general";
 const INBOX_URL = "https://troninbox.com/";
 const SHORTCUT_STORAGE_KEY = "tron.home.shortcuts";
 const STORE_INSTALL_STORAGE_KEY = "tron.store.installed";
+const ADS_SIDEBAR_STORAGE_KEY = "tron.ads-sidebar.collapsed";
+const MARKET_UPDATE_INTERVAL_MS = 20 * 60 * 1000;
+const MARKET_SYMBOLS = ["AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","AVGO","AMD","NFLX","ORCL","JPM","V","WMT","COST","LLY","MA","XOM","PLTR","INTC"];
 const STORE_CATALOG = [
   { id:"focus-mode", name:"Focus Mode", version:"1.0.0", category:"Productivity", description:"Keep browsing calm by reducing visual noise while you work.", icon:"✦" },
   { id:"page-notes", name:"Page Notes", version:"1.0.0", category:"Tools", description:"Save quick notes alongside the pages you are researching.", icon:"N" },
@@ -19,6 +22,10 @@ const tabSearchButton = document.getElementById("tab-search");
 const tabSearchMenu = document.getElementById("tab-search-menu");
 const content = document.getElementById("browser-content");
 const addressInput = document.getElementById("address-input");
+const marketTicker = document.getElementById("market-ticker");
+const marketTickerTrack = document.getElementById("market-ticker-track");
+const adsSidebar = document.getElementById("ads-sidebar");
+const adsSidebarToggle = document.getElementById("ads-sidebar-toggle");
 
 function applyBuildInfo(info) {
   const version = info?.version || "unknown";
@@ -27,6 +34,56 @@ function applyBuildInfo(info) {
   document.querySelectorAll("[data-build-info]").forEach(function(element) {
     element.textContent = `TRON ${version}${commit}${channel}`;
   });
+}
+
+function hasMarketNumber(value) {
+  return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
+}
+function formatMarketNumber(value, suffix) {
+  if (!hasMarketNumber(value)) return "—";
+  const number = Number(value);
+  return (number >= 0 ? "+" : "") + number.toFixed(2) + (suffix || "");
+}
+function renderMarketTicker(snapshot) {
+  if (!marketTickerTrack) return;
+  const bySymbol = new Map((Array.isArray(snapshot?.symbols) ? snapshot.symbols : []).map(function(item) { return [item.symbol, item]; }));
+  marketTickerTrack.innerHTML = MARKET_SYMBOLS.map(function(symbol, index) {
+    const item = bySymbol.get(symbol) || {};
+    const change = hasMarketNumber(item.change) ? Number(item.change) : null;
+    const tone = change !== null ? (change > 0 ? "up" : change < 0 ? "down" : "flat") : "empty";
+    const price = hasMarketNumber(item.price) ? "$" + Number(item.price).toFixed(2) : "—";
+    const percent = formatMarketNumber(item.percent_change, "%");
+    const divider = index < MARKET_SYMBOLS.length - 1 ? "<span class='market-ticker-divider' aria-hidden='true'></span>" : "";
+    return "<span class='market-ticker-item' title='" + esc(symbol + " market quote") + "'><span class='market-ticker-symbol'>" + esc(symbol) + "</span><span class='market-ticker-price'>" + esc(price) + "</span><span class='market-ticker-change market-ticker-change--" + tone + "'>" + esc(percent) + "</span></span>" + divider;
+  }).join("");
+  marketTicker.dataset.state = snapshot?.status || "loading";
+  marketTicker.title = snapshot?.message || (snapshot?.last_updated ? "Market snapshot refreshed " + snapshot.last_updated : "Market data is loading");
+}
+let marketRefreshInFlight = false;
+async function refreshMarketTicker() {
+  if (marketRefreshInFlight || !window.tronDesktop?.getMarketQuotes) return;
+  marketRefreshInFlight = true;
+  try {
+    renderMarketTicker(await window.tronDesktop.getMarketQuotes());
+  } catch (_) {
+    renderMarketTicker({ status: "unavailable", message: "Market data is unavailable." });
+  } finally {
+    marketRefreshInFlight = false;
+  }
+}
+function setAdsSidebarCollapsed(collapsed, persist) {
+  if (!adsSidebar || !adsSidebarToggle) return;
+  const next = Boolean(collapsed);
+  adsSidebar.classList.toggle("is-collapsed", next);
+  adsSidebarToggle.setAttribute("aria-label", next ? "Expand ads sidebar" : "Minimise ads sidebar");
+  adsSidebarToggle.setAttribute("title", next ? "Expand ads sidebar" : "Minimise ads sidebar");
+  adsSidebarToggle.setAttribute("aria-expanded", String(!next));
+  if (persist !== false) {
+    try { window.localStorage.setItem(ADS_SIDEBAR_STORAGE_KEY, String(next)); } catch (_) {}
+  }
+}
+function loadAdsSidebarCollapsed() {
+  try { return window.localStorage.getItem(ADS_SIDEBAR_STORAGE_KEY) === "true"; } catch (_) { return false; }
 }
 
 function esc(value) { return String(value == null ? "" : value).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
@@ -214,11 +271,16 @@ document.getElementById("bookmark-page").onclick=function(){addressInput.focus()
 document.getElementById("extensions").onclick=function(){showStore(current());};
 document.getElementById("profile").onclick=function(){addressInput.blur();};
 document.getElementById("browser-menu").onclick=function(){addressInput.blur();};
+adsSidebarToggle?.addEventListener("click",function(){setAdsSidebarCollapsed(!adsSidebar.classList.contains("is-collapsed"));});
 document.getElementById("minimize-window").onclick=function(){window.tronDesktop.minimize();};
 document.getElementById("maximize-window").onclick=function(){window.tronDesktop.toggleMaximize();};
 document.getElementById("close-window").onclick=function(){window.tronDesktop.close();};
 document.addEventListener("keydown",function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="l"){e.preventDefault();addressInput.focus();addressInput.select();}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="t"){e.preventDefault();const t=newInternal();t.entering=true;tabs.push(t);activate(t.id);}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="w"){e.preventDefault();if(activeTabId)closeTab(activeTabId);}});
 const first=newInternal();tabs.push(first);activate(first.id);
+setAdsSidebarCollapsed(loadAdsSidebarCollapsed(), false);
 window.tronRenderer={showHome:showHome,showChat:showChat,showStore:showStore};
 window.tronDesktop.getBuildInfo().then(applyBuildInfo).catch(function() {});
+renderMarketTicker({ status: "loading", message: "Market data is loading." });
+refreshMarketTicker();
+window.setInterval(refreshMarketTicker, MARKET_UPDATE_INTERVAL_MS);
 
