@@ -2,6 +2,7 @@ const tabs = [];
 let activeTabId = null;
 let tabSequence = 0;
 let updateReady = false;
+let latestInstallInProgress = false;
 const FALLBACK = "data:image/svg+xml;charset=utf-8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='8.5' fill='none' stroke='#9aa0a6' stroke-width='1.6'/><path d='M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5S14.4 18.1 12 20.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5Z' fill='none' stroke='#9aa0a6' stroke-width='1.2'/></svg>");
 const tabStrip = document.getElementById("tab-strip");
 const content = document.getElementById("browser-content");
@@ -14,6 +15,14 @@ function applyBuildInfo(info) {
   const channel = info?.channel === "development" ? " · development" : "";
   document.querySelectorAll("[data-build-info]").forEach(function(element) {
     element.textContent = `TRON ${version}${commit}${channel}`;
+  });
+}
+
+function setUpdateButtons(label, disabled, title) {
+  [updateButton].concat(Array.from(document.querySelectorAll("[data-update]"))).forEach(function(button) {
+    button.disabled = disabled;
+    button.textContent = label;
+    if (title) button.title = title;
   });
 }
 
@@ -70,7 +79,7 @@ function box(query,compact) {
   return "<div class='search-box-wrap" + (compact ? " compact" : "") + "'><form class='search-form' data-search-form><div class='search-shell'><span class='search-plus'>" + svg("plus") + "</span><input name='q' value='" + esc(query || "") + "' placeholder='Ask TRON' autocomplete='off' spellcheck='false'><button type='button' class='search-action'>" + svg("mic") + "</button><button type='button' class='search-action disabled-action' disabled>" + svg("lens") + "</button><a class='ai-button' data-infinity href='https://infinity.tronxvi.com'>" + svg("sparkle") + "<span>Ask Infinity</span>" + svg("arrow") + "</a></div></form></div>";
 }
 function homeHtml() {
-  return "<main class='tron-page home-page'><header class='home-header'><a class='home-brand' data-home href='#'><img src='./tron-logo.png' alt='TRON'></a><nav class='home-nav'><button class='download-button' data-update>Download latest TRON</button></nav></header><section class='home-content'><div class='home-center'><img class='hero-logo' src='./tron-logo.png' alt='TRON logo'>" + box("",false) + "</div><p class='home-version' data-build-info>TRON local build</p></section></main>";
+  return "<main class='tron-page home-page'><header class='home-header'><a class='home-brand' data-home href='#'><img src='./tron-logo.png' alt='TRON'></a><nav class='home-nav'><button class='download-button' data-update type='button'>Install latest TRON</button></nav></header><section class='home-content'><div class='home-center'><img class='hero-logo' src='./tron-logo.png' alt='TRON logo'>" + box("",false) + "</div><p class='home-version' data-build-info>TRON local build</p></section></main>";
 }
 function dateText(value) { const d=new Date(value); return Number.isNaN(d.getTime()) ? "Stored locally" : "Stored " + new Intl.DateTimeFormat("en",{dateStyle:"medium"}).format(d); }
 function resultHtml(r) {
@@ -97,7 +106,7 @@ function bind(page,tab) {
   page.querySelectorAll("[data-page]").forEach(function(a){a.onclick=function(e){e.preventDefault();search(tab.query,Number(a.dataset.page),tab);};});
   page.querySelectorAll("[data-home]").forEach(function(a){a.onclick=function(e){e.preventDefault();showHome(tab);};});
   page.querySelectorAll("[data-infinity]").forEach(function(a){a.onclick=function(e){e.preventDefault();external(a.href,"Infinity");};});
-  page.querySelectorAll("[data-update]").forEach(function(a){a.onclick=function(){updateButton.click();};});
+  page.querySelectorAll("[data-update]").forEach(function(a){a.onclick=function(){installLatest();};});
   page.querySelectorAll("[data-retry]").forEach(function(a){a.onclick=function(e){e.preventDefault();search(tab.query,tab.page,tab);};});
 }
 async function search(query,pageNumber,tab) {
@@ -124,9 +133,20 @@ document.getElementById("browser-menu").onclick=function(){addressInput.blur();}
 document.getElementById("minimize-window").onclick=function(){window.tronDesktop.minimize();};
 document.getElementById("maximize-window").onclick=function(){window.tronDesktop.toggleMaximize();};
 document.getElementById("close-window").onclick=function(){window.tronDesktop.close();};
-updateButton.onclick=async function(){if(updateReady){updateButton.disabled=true;updateButton.textContent="Restarting…";await window.tronDesktop.installUpdate();return;}updateButton.disabled=true;updateButton.textContent="Checking…";await window.tronDesktop.checkForUpdates();};
+async function installLatest() {
+  if (latestInstallInProgress) return;
+  latestInstallInProgress = true;
+  setUpdateButtons("Checking release…", true, "Reading the signed TRON release metadata");
+  try {
+    await window.tronDesktop.installLatest();
+  } catch (error) {
+    latestInstallInProgress = false;
+    setUpdateButtons("Retry latest install", false, error instanceof Error ? error.message : "TRON could not install the latest release.");
+  }
+}
+updateButton.onclick=installLatest;
 document.addEventListener("keydown",function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="l"){e.preventDefault();addressInput.focus();addressInput.select();}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="t"){e.preventDefault();const t=newInternal();tabs.push(t);activate(t.id);}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="w"){e.preventDefault();if(activeTabId)closeTab(activeTabId);}});
-window.tronDesktop.onUpdateStatus(function(s){if(s.state==="development"){updateButton.disabled=false;updateButton.textContent="Check updates";}else if(s.state==="checking"){updateButton.disabled=true;updateButton.textContent="Checking…";}else if(s.state==="downloading"){updateButton.disabled=true;updateButton.textContent=s.percent ? "Updating " + s.percent + "%" : "Downloading…";}else if(s.state==="ready"){updateReady=true;updateButton.disabled=false;updateButton.textContent="Restart to update";}else if(s.state==="current"){updateReady=false;updateButton.disabled=false;updateButton.textContent="TRON is up to date";setTimeout(function(){if(!updateReady)updateButton.textContent="Check updates";},3500);}else if(s.state==="error"){updateReady=false;updateButton.disabled=false;updateButton.textContent="Retry update";updateButton.title=s.message || "Update check failed";}});
+window.tronDesktop.onUpdateStatus(function(s){if(latestInstallInProgress && s.state!=="installing" && s.state!=="error")return;if(s.state==="checking"){setUpdateButtons("Checking release…",true);}else if(s.state==="downloading"){setUpdateButtons(s.percent ? "Downloading " + s.percent + "%" : "Downloading…",true);}else if(s.state==="installing"){setUpdateButtons("Installing latest…",true);}else if(s.state==="ready"){updateReady=true;setUpdateButtons("Restart to update",false);}else if(s.state==="current"){updateReady=false;setUpdateButtons("Install latest TRON",false);}else if(s.state==="error"){updateReady=false;latestInstallInProgress=false;setUpdateButtons("Retry latest install",false,s.message || "TRON could not install the latest release.");}});
 const first=newInternal();tabs.push(first);activate(first.id);
 window.tronDesktop.getBuildInfo().then(applyBuildInfo).catch(function() {});
 

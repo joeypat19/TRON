@@ -3,9 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("tronDesktop", {
   search: (query, page = 1, limit = 10) => ipcRenderer.invoke("tron:search", { query, page, limit }),
   getBuildInfo: () => ipcRenderer.invoke("tron:get-build-info"),
-  openUpdate: () => ipcRenderer.invoke("tron:open-update"),
-  checkForUpdates: () => ipcRenderer.invoke("tron:check-for-updates"),
-  installUpdate: () => ipcRenderer.invoke("tron:install-update"),
+  installLatest: () => ipcRenderer.invoke("tron:install-latest"),
   onUpdateStatus: (callback) => {
     const listener = (_event, status) => callback(status);
     ipcRenderer.on("tron:update-status", listener);

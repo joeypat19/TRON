@@ -1,14 +1,20 @@
 const { app, BrowserWindow, ipcMain, shell, session } = require("electron");
 const { autoUpdater } = require("electron-updater");
+const { createHash } = require("node:crypto");
+const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
+const { Readable, Transform } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
 
 const isDevelopment = !app.isPackaged;
 const backendUrl = process.env.TRON_BACKEND_URL || "http://127.0.0.1:938";
-const updateUrl = process.env.TRON_UPDATE_URL || "https://github.com/joeypat19/TRON/releases/latest";
+const releaseManifestUrl = "https://github.com/joeypat19/TRON/releases/latest/download/latest.yml";
+const releaseDownloadBaseUrl = "https://github.com/joeypat19/TRON/releases/latest/download/";
 
 let mainWindow;
 let lastUpdateStatus = { state: "idle" };
+let latestInstallPromise = null;
 
 function readBuildInfo() {
   try {
@@ -45,9 +51,86 @@ function sendUpdateStatus(status) {
   mainWindow?.webContents.send("tron:update-status", status);
 }
 
+function parseLatestManifest(manifest) {
+  const read = (key) => {
+    const match = manifest.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
+    return match ? match[1].trim().replace(/^['"]|['"]$/g, "") : "";
+  };
+  const version = read("version");
+  const installerName = read("path");
+  const sha512 = read("sha512");
+  const size = Number(read("size"));
+  if (!version || !/^TRON-[\w.-]+-Setup\.exe$/i.test(installerName) || !sha512 || !Number.isSafeInteger(size) || size < 1) {
+    throw new Error("The latest TRON release metadata is incomplete or invalid.");
+  }
+  return { version, installerName, sha512, size };
+}
+
+async function downloadLatestInstaller() {
+  if (latestInstallPromise) return latestInstallPromise;
+
+  latestInstallPromise = (async () => {
+    sendUpdateStatus({ state: "checking" });
+    const manifestResponse = await fetch(releaseManifestUrl, {
+      headers: { Accept: "text/plain", "User-Agent": "TRON-desktop-updater" },
+    });
+    if (!manifestResponse.ok) throw new Error(`Could not read the latest TRON release (${manifestResponse.status}).`);
+    const manifest = parseLatestManifest(await manifestResponse.text());
+    const installerUrl = new URL(encodeURI(manifest.installerName), releaseDownloadBaseUrl);
+    const installerPath = path.join(app.getPath("temp"), `TRON-${manifest.version}-Setup-${process.pid}.exe`);
+    await fs.promises.rm(installerPath, { force: true });
+
+    const installerResponse = await fetch(installerUrl, {
+      headers: { Accept: "application/octet-stream", "User-Agent": "TRON-desktop-updater" },
+    });
+    if (!installerResponse.ok || !installerResponse.body) {
+      throw new Error(`Could not download the latest TRON installer (${installerResponse.status}).`);
+    }
+
+    let received = 0;
+    const hash = createHash("sha512");
+    const progress = new Transform({
+      transform(chunk, _encoding, callback) {
+        received += chunk.length;
+        hash.update(chunk);
+        const percent = Math.min(100, Math.round((received / manifest.size) * 100));
+        sendUpdateStatus({ state: "downloading", version: manifest.version, percent });
+        callback(null, chunk);
+      },
+    });
+
+    try {
+      await pipeline(Readable.fromWeb(installerResponse.body), progress, fs.createWriteStream(installerPath));
+      const actualSha512 = hash.digest("base64");
+      if (received !== manifest.size || actualSha512 !== manifest.sha512) {
+        throw new Error("The downloaded TRON installer failed its integrity check.");
+      }
+
+      sendUpdateStatus({ state: "installing", version: manifest.version });
+      const child = spawn(installerPath, [], { detached: true, stdio: "ignore", windowsHide: false });
+      child.unref();
+      setTimeout(() => app.quit(), 250);
+      return { state: "installing", version: manifest.version };
+    } catch (error) {
+      await fs.promises.rm(installerPath, { force: true });
+      throw error;
+    }
+  })()
+    .catch((error) => {
+      const status = { state: "error", message: error.message };
+      sendUpdateStatus(status);
+      throw error;
+    })
+    .finally(() => {
+      latestInstallPromise = null;
+    });
+
+  return latestInstallPromise;
+}
+
 function configureAutoUpdates() {
   if (isDevelopment) {
-    sendUpdateStatus({ state: "development" });
+    sendUpdateStatus({ state: "idle" });
     return;
   }
 
@@ -122,19 +205,7 @@ app.whenReady().then(async () => {
     return response.json();
   });
   ipcMain.handle("tron:get-build-info", () => getBuildInfo());
-  ipcMain.handle("tron:open-update", () => shell.openExternal(updateUrl));
-  ipcMain.handle("tron:check-for-updates", async () => {
-    if (isDevelopment) return { state: "development" };
-    try {
-      await autoUpdater.checkForUpdates();
-      return lastUpdateStatus;
-    } catch (error) {
-      const status = { state: "error", message: error.message };
-      sendUpdateStatus(status);
-      return status;
-    }
-  });
-  ipcMain.handle("tron:install-update", () => autoUpdater.quitAndInstall(false, true));
+  ipcMain.handle("tron:install-latest", () => downloadLatestInstaller());
   ipcMain.on("tron:window-minimize", () => mainWindow?.minimize());
   ipcMain.on("tron:window-toggle-maximize", () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize();
