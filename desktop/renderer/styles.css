@@ -15,23 +15,39 @@ body { margin: 0; overflow: hidden; background: var(--chrome); color: var(--text
 button, input { font: inherit; }
 button { border: 0; color: inherit; cursor: pointer; }
 .app-shell { display: flex; flex-direction: column; }
-.chrome-header { display: flex; align-items: end; height: 40px; padding: 0 10px; background: transparent; -webkit-app-region: drag; }
-.tab-strip { display: flex; align-items: end; flex: 0 1 auto; min-width: 0; max-width: calc(100% - 100px); height: 100%; overflow-x: auto; scrollbar-width: none; }
+.chrome-header { position:relative; display: flex; align-items: end; height: 40px; padding: 0 10px; background: transparent; -webkit-app-region: drag; }
+.tab-search { display:grid; place-items:center; flex:0 0 34px; width:34px; height:30px; margin:0 4px 3px 0; border-radius:50%; color:var(--muted); background:transparent; -webkit-app-region:no-drag; }
+.tab-search:hover { color:var(--text); background:var(--chrome-hover); }
+.tab-search svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:2; }
+.tab-strip { display: flex; align-items: end; flex: 0 1 auto; min-width: 0; max-width: calc(100% - 150px); height: 100%; overflow-x: auto; scrollbar-width: none; }
 .tab-strip::-webkit-scrollbar { display:none; }
-.tab-strip::after { width: 1px; height: 18px; margin: 0 10px 8px 6px; background: var(--chrome-line); content: ""; }
-.tab { position: relative; display: flex; align-items: center; flex: 0 0 240px; gap: 9px; width: 240px; height: 34px; margin-right: 4px; padding: 0 12px; border-radius: 9px 9px 0 0; background: transparent; color: var(--muted); font-size: 12px; -webkit-app-region: no-drag; transition: background .16s ease, color .16s ease, box-shadow .16s ease; }
+.tab-strip::after { display:none; }
+.tab { --tab-width:240px; position: relative; display: flex; align-items: center; flex: 0 0 var(--tab-width); gap: 9px; width: var(--tab-width); height: 34px; margin-right: 4px; padding: 0 12px; overflow:hidden; border-radius: 9px 9px 0 0; background: transparent; color: var(--muted); font-size: 12px; -webkit-app-region: no-drag; transition: background .16s ease, color .16s ease, box-shadow .16s ease; }
 .tab:not(:last-child)::after { position: absolute; top: 8px; right: -3px; width: 2px; height: 18px; border-radius: 2px; background: #5f6368; content: ""; opacity: .9; }
 .tab.active { background: transparent; color: var(--text); }
 .tab-favicon { display: grid; place-items: center; width: 23px; height: 23px; overflow: hidden; border-radius: 50%; background: transparent; }
 .tab-favicon img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .tab-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tab-close { width: 34px; height: 30px; border-radius: 50%; background: transparent; color: var(--muted); font-size: 23px; line-height: 1; }
+.tab-close { position:relative; width: 30px; height: 28px; border-radius: 50%; background: transparent; color: var(--muted); font-size: 0; line-height: 1; }
+.tab-close::before,.tab-close::after { position:absolute; top:50%; left:50%; width:12px; height:1.8px; border-radius:2px; background:currentColor; content:""; }
+.tab-close::before { transform:translate(-50%,-50%) rotate(45deg); }
+.tab-close::after { transform:translate(-50%,-50%) rotate(-45deg); }
 .tab-close:hover, .new-tab:hover, .window-controls button:hover { background: var(--chrome-hover); color: var(--text); }
-.new-tab { width: 34px; height: 30px; margin: 0 0 3px 4px; border-radius: 50%; background: transparent; color: var(--muted); font-size: 23px; line-height: 1; -webkit-app-region: no-drag; }
-@keyframes tab-enter { from { opacity:0; transform:translateY(5px) scale(.96); } to { opacity:1; transform:translateY(0) scale(1); } }
-@keyframes tab-exit { from { opacity:1; transform:translateY(0) scale(1); } to { opacity:0; transform:translateY(-4px) scale(.94); } }
-.tab-entering { animation:tab-enter .18s cubic-bezier(.2,.8,.2,1) both; transform-origin:left center; }
-.tab-exiting { animation:tab-exit .17s cubic-bezier(.4,0,1,1) both; pointer-events:none; transform-origin:left center; }
+.new-tab { position:relative; width: 34px; height: 30px; margin: 0 0 3px 4px; border-radius: 50%; background: transparent; color: var(--muted); font-size: 0; line-height: 1; -webkit-app-region: no-drag; }
+.new-tab::before,.new-tab::after { position:absolute; top:50%; left:50%; width:16px; height:2px; border-radius:2px; background:currentColor; content:""; }
+.new-tab::before { transform:translate(-50%,-50%); }
+.new-tab::after { transform:translate(-50%,-50%) rotate(90deg); }
+.new-tab:hover { background:rgba(154,98,255,.22); color:#fff; }
+.tab-search-menu { position:absolute; z-index:20; top:38px; left:8px; display:grid; width:250px; max-height:360px; overflow:auto; padding:8px; border:1px solid rgba(190,196,255,.24); border-radius:12px; background:rgba(20,21,34,.98); box-shadow:0 14px 40px rgba(0,0,0,.48),var(--accent-shadow); }
+.tab-search-menu[hidden] { display:none; }
+.tab-search-item { display:flex; align-items:center; gap:10px; min-height:38px; padding:0 9px; border-radius:8px; color:var(--muted-strong); background:transparent; text-align:left; }
+.tab-search-item:hover,.tab-search-item.active { color:#fff; background:rgba(154,98,255,.16); }
+.tab-search-item .tab-favicon { width:18px; height:18px; flex:0 0 18px; }
+.tab-search-item-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+@keyframes tab-enter { from { opacity:0; flex-basis:0; width:0; margin-right:0; padding-right:0; padding-left:0; transform:translateY(3px); } to { opacity:1; flex-basis:var(--tab-width); width:var(--tab-width); margin-right:4px; padding-right:12px; padding-left:12px; transform:translateY(0); } }
+@keyframes tab-exit { from { opacity:1; flex-basis:var(--tab-width); width:var(--tab-width); margin-right:4px; padding-right:12px; padding-left:12px; transform:translateY(0); } to { opacity:0; flex-basis:0; width:0; margin-right:0; padding-right:0; padding-left:0; transform:translateY(-2px); } }
+.tab-entering { animation:tab-enter .22s cubic-bezier(.2,.8,.2,1) both; transform-origin:left center; }
+.tab-exiting { animation:tab-exit .21s cubic-bezier(.4,0,1,1) both; pointer-events:none; transform-origin:left center; }
 @media (prefers-reduced-motion: reduce) { .tab-entering,.tab-exiting { animation:none; } }
 .window-controls { display: flex; align-items: center; height: 100%; margin-left: auto; -webkit-app-region: no-drag; }
 .window-controls button { position: relative; width: 34px; height: 30px; background: transparent; color: var(--muted); font-size: 0; }
@@ -65,11 +81,12 @@ button { border: 0; color: inherit; cursor: pointer; }
 .update-button { height: 32px; padding: 0 12px; border: 1px solid #5f6368; border-radius: 17px; background: var(--chrome-panel); color: var(--text); font-size: 12px; white-space: nowrap; }
 .update-button:hover { border-color: #8ab4f8; background: var(--chrome-hover); }
 .update-button:disabled { cursor: wait; opacity: .78; }
+.toolbar-divider { width:1px; height:20px; margin:0 3px; background:rgba(190,196,255,.2); }
 .browser-content { position: relative; min-height: 0; flex: 1; background: #202124; }
 webview { display: flex; width: 100%; height: 100%; border: 0; }
 
 @media (max-width: 760px) {
-  .tab { width: 190px; }
+  .tab { --tab-width:190px; width: 190px; }
   .window-controls button { width: 34px; }
   .toolbar { padding-inline: 6px; }
   .toolbar-button { width: 27px; }
@@ -219,10 +236,14 @@ body {
 .window-controls button:last-child:hover { background: rgba(255, 43, 214, .62); }
 .toolbar-button.muted { color: #676d86; }
 .site-icon {
-  background: var(--accent-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  width:22px;
+  height:22px;
+  background:none;
+  color:#fff;
+  font-size:18px;
+  font-weight:700;
+  letter-spacing:-1px;
+  line-height:1;
 }
 .profile::before { background: var(--accent-gradient); box-shadow: 0 0 15px rgba(154, 98, 255, .34); }
 .profile::after { background: var(--chrome-deep); }

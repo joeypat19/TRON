@@ -11,8 +11,10 @@
   <body>
     <div class="app-shell">
       <header class="chrome-header">
+        <button class="tab-search" id="tab-search" type="button" aria-label="Search tabs" title="Search tabs"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m7 9 5 5 5-5"></path></svg></button>
         <div class="tab-strip" id="tab-strip"></div>
         <button class="new-tab" id="new-tab" aria-label="New tab" title="New tab">+</button>
+        <div class="tab-search-menu" id="tab-search-menu" hidden></div>
         <div class="window-controls" aria-label="Window controls">
           <button id="minimize-window" aria-label="Minimize"></button>
           <button id="maximize-window" aria-label="Maximize"></button>
@@ -25,11 +27,12 @@
         <button class="toolbar-button muted" id="go-forward" aria-label="Forward" title="Forward"></button>
         <button class="toolbar-button" id="reload-page" aria-label="Reload" title="Reload"></button>
         <form class="address-form" id="address-form">
-          <span class="site-icon" aria-hidden="true">T</span>
+          <span class="site-icon" aria-hidden="true">G</span>
           <input id="address-input" aria-label="Address and search bar" autocomplete="off" spellcheck="false" />
           <button class="address-action" id="bookmark-page" type="button" aria-label="Bookmark page" title="Bookmark page"></button>
         </form>
         <button class="update-button" id="update-tron" type="button" aria-label="Install the latest TRON" title="Install the latest TRON">Install latest TRON</button>
+        <span class="toolbar-divider" aria-hidden="true"></span>
         <button class="toolbar-button" id="extensions" aria-label="Extensions" title="Extensions"></button>
         <button class="toolbar-button profile" id="profile" aria-label="Profile" title="TRON profile"></button>
         <button class="toolbar-button" id="browser-menu" aria-label="Menu" title="Menu"></button>

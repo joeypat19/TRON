@@ -5,6 +5,8 @@ let updateReady = false;
 let latestInstallInProgress = false;
 const FALLBACK = "data:image/svg+xml;charset=utf-8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='8.5' fill='none' stroke='#9aa0a6' stroke-width='1.6'/><path d='M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5S14.4 18.1 12 20.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5Z' fill='none' stroke='#9aa0a6' stroke-width='1.2'/></svg>");
 const tabStrip = document.getElementById("tab-strip");
+const tabSearchButton = document.getElementById("tab-search");
+const tabSearchMenu = document.getElementById("tab-search-menu");
 const content = document.getElementById("browser-content");
 const addressInput = document.getElementById("address-input");
 const updateButton = document.getElementById("update-tron");
@@ -53,6 +55,17 @@ function tabIcon(tab) {
   const image = document.createElement("img"); image.src = tab.favicon || FALLBACK; image.alt = "";
   image.onerror = function() { image.src = FALLBACK; }; holder.append(image); return holder;
 }
+function renderTabSearchMenu() {
+  if (!tabSearchMenu || tabSearchMenu.hidden) return;
+  tabSearchMenu.replaceChildren();
+  tabs.forEach(function(tab) {
+    const item = document.createElement("button"); item.type = "button"; item.className = "tab-search-item" + (tab.id === activeTabId ? " active" : ""); item.dataset.tabId = tab.id;
+    item.append(tabIcon(tab));
+    const label = document.createElement("span"); label.className = "tab-search-item-title"; label.textContent = tab.title || "New tab"; item.append(label);
+    item.onclick = function(event) { event.stopPropagation(); activate(tab.id); tabSearchMenu.hidden = true; };
+    tabSearchMenu.append(item);
+  });
+}
 function renderTabs() {
   tabStrip.replaceChildren();
   tabs.forEach(function(tab) {
@@ -63,6 +76,7 @@ function renderTabs() {
     const close = document.createElement("button"); close.className = "tab-close"; close.type = "button"; close.textContent = "×"; close.setAttribute("aria-label","Close tab");
     close.onclick = function(event) { event.stopPropagation(); closeTab(tab.id); }; node.append(close); tabStrip.append(node);
   });
+  renderTabSearchMenu();
 }
 function updateAddress(tab) { if (!tab) return; addressInput.value = tab.kind === "internal" ? (tab.route === "home" || tab.route === "chat" ? "" : "tron://search?q=" + encodeURIComponent(tab.query)) : tab.url; document.title = "TRON"; }
 function syncContentVisibility(tab) {
@@ -152,11 +166,13 @@ function showHome(tab) { tab=ensureInternal(tab); if(!tab) return; tab.searchTok
 function showChat(tab) { tab=ensureInternal(tab); if(!tab) return; tab.searchToken=Symbol("chat"); tab.route="chat";tab.query="";tab.page=1;tab.loading=false;tab.error=null;tab.title="General Chat";if(!tab.chat) tab.chat=window.tronChat.createState();renderTabs();updateAddress(tab);renderInternal(tab); }
 function activate(id) { if(!tabs.some(function(tab){return tab.id===id;}))return; if(activeTabId===id){const same=current();syncContentVisibility(same);renderTabs();updateAddress(same);return;} activeTabId=id;const tab=current();if(tab && tab.kind==="internal")renderInternal(tab);else syncContentVisibility(tab);renderTabs();updateAddress(tab); }
 function finishCloseTab(id) { const i=tabs.findIndex(function(t){return t.id===id;});if(i<0)return;const old=tabs.splice(i,1)[0];if(old.webview)old.webview.remove();if(!tabs.length){const t=newInternal();tabs.push(t);activate(t.id);}else if(activeTabId===id)activate(tabs[Math.max(0,i-1)].id);else renderTabs(); }
-function closeTab(id) { const tab=tabs.find(function(t){return t.id===id;});if(!tab || tab.closing)return;tab.closing=true;const node=Array.from(tabStrip.children).find(function(item){return item.dataset.tabId===id;});if(!node)return finishCloseTab(id);node.classList.add("tab-exiting");node.setAttribute("aria-hidden","true");window.setTimeout(function(){finishCloseTab(id);},170); }
+function closeTab(id) { const tab=tabs.find(function(t){return t.id===id;});if(!tab || tab.closing)return;tab.closing=true;const node=Array.from(tabStrip.children).find(function(item){return item.dataset.tabId===id;});if(!node)return finishCloseTab(id);node.classList.add("tab-exiting");node.setAttribute("aria-hidden","true");window.setTimeout(function(){finishCloseTab(id);},210); }
 function destination(value) { const v=String(value || "").trim();if(!v)return {kind:"home"};if(/^tron:\/\/infinity\/?$/i.test(v))return {kind:"chat"};if(/^tron:\/\/search\?q=/i.test(v))return {kind:"search",query:new URL(v).searchParams.get("q") || ""};if(/^[a-z][a-z\d+.-]*:\/\//i.test(v))return {kind:"external",url:v};if(/^(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/.*)?$/i.test(v))return {kind:"external",url:"http://" + v};if(/^[^\s]+\.[^\s]+(\/.*)?$/i.test(v))return {kind:"external",url:"https://" + v};return {kind:"search",query:v}; }
 function navigate(value) { const d=destination(value),t=current();if(d.kind==="home")return showHome(t);if(d.kind==="chat")return showChat(t);if(d.kind==="search"){const s=ensureInternal(t) || newInternal();if(!tabs.includes(s))tabs.push(s);activate(s.id);return search(d.query,1,s);}return navigateExternal(d.url); }
 
 document.getElementById("new-tab").onclick=function(){const t=newInternal();t.entering=true;tabs.push(t);activate(t.id);};
+tabSearchButton.onclick=function(event){event.stopPropagation();tabSearchMenu.hidden=!tabSearchMenu.hidden;renderTabSearchMenu();};
+document.addEventListener("click",function(event){if(tabSearchMenu && !tabSearchMenu.hidden && !tabSearchMenu.contains(event.target) && event.target!==tabSearchButton)tabSearchMenu.hidden=true;});
 document.getElementById("address-form").onsubmit=function(e){e.preventDefault();navigate(addressInput.value);};
 document.getElementById("go-back").onclick=function(){const t=current();if(t && t.kind==="external"){if(t.webview.canGoBack())t.webview.goBack();}else if(t && t.route!=="home")showHome(t);};
 document.getElementById("go-forward").onclick=function(){const t=current();if(t && t.kind==="external" && t.webview.canGoForward())t.webview.goForward();};
