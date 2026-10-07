@@ -15,4 +15,5 @@ desktop/build-info.json
 
 
 .vercel
+.codex/
 .env*

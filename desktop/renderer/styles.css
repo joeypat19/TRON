@@ -37,8 +37,8 @@ button { border: 0; color: inherit; cursor: pointer; }
 .window-controls button { position: relative; width: 34px; height: 30px; background: transparent; color: var(--muted); font-size: 0; }
 .window-controls button::before, .window-controls button::after { position: absolute; top: 50%; left: 50%; display: block; content: ""; }
 #minimize-window::before { width: 14px; height: 2px; border-radius: 2px; background: currentColor; transform: translate(-50%, -50%); }
-#maximize-window::before { width: 12px; height: 11px; border: 2px solid currentColor; border-radius: 2px; background: transparent; transform: translate(-50%, -50%); }
-#maximize-window::after { width: 12px; height: 11px; border: 2px solid currentColor; border-radius: 2px; background: var(--chrome); transform: translate(-25%, -75%); }
+#maximize-window::before { width: 10px; height: 9px; border: 1.5px solid currentColor; border-radius: 2px; background: transparent; transform: translate(-50%, -50%) rotate(180deg); }
+#maximize-window::after { width: 10px; height: 9px; border: 1.5px solid currentColor; border-radius: 2px; background: var(--chrome); transform: translate(-25%, -75%) rotate(180deg); }
 #close-window::before, #close-window::after { width: 14px; height: 2px; border-radius: 2px; background: currentColor; transform: translate(-50%, -50%) rotate(45deg); }
 #close-window::after { transform: translate(-50%, -50%) rotate(-45deg); }
 .window-controls button:last-child:hover { background: #a33; }
